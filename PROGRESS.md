@@ -97,3 +97,33 @@ Verified:
 - **Integration tests: 25 passing** (added explorer overview + list).
 - **Live browser verification**: loaded Explorer, connected with seeded tokens (SSE "stream live"), seeded subscription rendered, **ingested an event via the UI → PENDING delivery appeared in the table and INGESTED/CREATED streamed live over SSE**, overview updated (1 event / 1 pending).
 - Explorer `typecheck` ✅, `vite build` ✅ (50 KB gzip), `pnpm lint` ✅.
+
+## Phase 7 — Observability & documentation ✅
+
+Created:
+
+- **Docker**: `apps/api/Dockerfile`, `apps/worker/Dockerfile`, `apps/explorer/Dockerfile`
+  (multi-stage → nginx), `apps/explorer/nginx.conf` (SPA + `/v1` & `/metrics` proxy, SSE-safe),
+  `.dockerignore`. Compose `full` profile wires all five services.
+- **Docs**: comprehensive `README.md` (setup, Docker, demo script, API reference, reliability
+  model, tradeoffs, config), `docs/architecture.md` (summary + ADRs), `docs/api-examples.md`
+  (curl + TypeScript consumer loop).
+- Metrics/observability confirmed complete (all required counters, gauges, latency histograms;
+  Pino structured logs with `req_…` correlation ids and secret/payload redaction).
+
+Verified:
+
+- **Full stack via `docker compose --profile full up --build`**: postgres + redis + **api +
+  worker + explorer** all start; API runs `prisma migrate deploy` then serves; `/health/ready`
+  → postgres+redis ok; `/metrics` served; Explorer (nginx) serves and proxies `/v1` to the API.
+- Final gate: `pnpm typecheck` ✅ (9 projects), `pnpm lint` ✅, `pnpm format` ✅,
+  **unit tests (14) + integration tests (25) = 39 passing**.
+
+---
+
+## Summary — Definition of Done
+
+All completion criteria met: starts via Docker Compose; migrations run; API/worker/Redis/
+Postgres/Explorer start locally; end-to-end delivery flow works; retries + dead-letter replay
+work; long polling works; Explorer receives live SSE updates; tests + typecheck + lint pass;
+OpenAPI available at `/docs`; README has exact setup + demo instructions.
