@@ -51,3 +51,22 @@ Verified:
 - `pnpm typecheck` ✅, `pnpm lint` ✅, unit tests ✅.
 
 **Design decision:** all success responses use a `{ data: ... }` envelope (matching the task's "API expectations" example and mirroring the `{ error: ... }` envelope) — the architecture doc's flat examples are wrapped consistently.
+
+## Phase 4 — Reliability ✅
+
+Created:
+
+- `DeliveryService.nack` (validate lease → exponential backoff retry or dead-letter), `recoverExpiredLeases`, shared `applyFailure` transition.
+- `ReplayService` (admin dead-letter → PENDING, row-locked, audit record, idempotent via Idempotency-Key), `DeliveryReadService` (delivery detail).
+- Routes: `POST /deliveries/:id/nack`, `POST /deliveries/:id/replay`, `GET /deliveries/:id`.
+- Worker: BullMQ `triggers-maintenance` queue + repeatable `recover-expired-leases` scheduler (5s), sharing the retry policy (`decideRetryOutcome`, `computeRetryDelayMs`) with the API.
+- `/metrics` now refreshes `active_leases` / `pending_deliveries` gauges from the DB (authoritative across API + worker).
+
+Verified:
+
+- **Integration tests: 19 passing** (added reliability + concurrency). Covers NACK→retry (backoff, availableAt in future), attempts-exhausted→dead-letter, replay→PENDING+audit, replay of non-dead-letter→409, idempotent replay, lease-expiry redelivery, **two concurrent consumers never double-lease** (single + N-event fan-out with zero overlap).
+- Worker boots and runs the scheduled recovery job with no errors.
+- `pnpm typecheck` ✅, `pnpm lint` ✅.
+
+### ⚠️ Environment note — OneDrive vs. node_modules
+Mid-build, OneDrive "Files On-Demand" dehydrated `node_modules` into cloud placeholders; Node's `readFileSync` fails on those (`EBADF`/`UNKNOWN`), breaking `tsc`/`vitest`. Fix applied: **stopped the OneDrive process and reinstalled `node_modules` fresh** (real local files). OneDrive is left stopped for the remainder of the build. **Recommendation:** move this repo outside OneDrive (e.g. `C:\dev\TriggersAPI`) or exclude `node_modules` from OneDrive sync — otherwise placeholders will recur. Restart OneDrive when done.
