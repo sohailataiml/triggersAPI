@@ -1,0 +1,91 @@
+# Local development infrastructure for TriggersAPI.
+# Host ports 5433/6380 are used to avoid clashes with other local stacks
+# that already bind 5432/6379 on this machine.
+services:
+  postgres:
+    image: postgres:16
+    container_name: triggers-postgres
+    environment:
+      POSTGRES_USER: triggers
+      POSTGRES_PASSWORD: triggers
+      POSTGRES_DB: triggers
+    ports:
+      - '5433:5432'
+    volumes:
+      - triggers-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U triggers']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: triggers-redis
+    ports:
+      - '6380:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # Application services. Started with the `full` profile so that
+  # `docker compose up -d postgres redis` brings up only infrastructure by default.
+  # ---------------------------------------------------------------------------
+  api:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: triggers-api
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://triggers:triggers@postgres:5432/triggers?schema=public
+      REDIS_URL: redis://redis:6379
+      API_KEY_PEPPER: dev-pepper-change-me
+      LEASE_TOKEN_SECRET: dev-lease-secret-change-me
+      CORS_ORIGINS: http://localhost:5173,http://localhost:4173
+      LOG_LEVEL: info
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: triggers-worker
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://triggers:triggers@postgres:5432/triggers?schema=public
+      REDIS_URL: redis://redis:6379
+      API_KEY_PEPPER: dev-pepper-change-me
+      LEASE_TOKEN_SECRET: dev-lease-secret-change-me
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  explorer:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: apps/explorer/Dockerfile
+    container_name: triggers-explorer
+    ports:
+      - '5173:80'
+    depends_on:
+      - api
+
+volumes:
+  triggers-pgdata:

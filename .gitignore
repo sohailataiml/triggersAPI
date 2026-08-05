@@ -1,9 +1,15 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Build output
 dist/
+build/
 *.tsbuildinfo
+
+# Prisma generated client
+prisma/generated/
+packages/database/src/generated/
 
 # Test / coverage
 coverage/
@@ -16,9 +22,13 @@ coverage/
 # Logs
 *.log
 npm-debug.log*
+pnpm-debug.log*
 
 # Editor / OS
 .DS_Store
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Vite
+apps/explorer/dist/

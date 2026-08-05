@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": false,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+
+    "baseUrl": ".",
+    "paths": {
+      "@triggers/config": ["packages/config/src/index.ts"],
+      "@triggers/contracts": ["packages/contracts/src/index.ts"],
+      "@triggers/database": ["packages/database/src/index.ts"],
+      "@triggers/domain": ["packages/domain/src/index.ts"],
+      "@triggers/observability": ["packages/observability/src/index.ts"],
+      "@triggers/test-utils": ["packages/test-utils/src/index.ts"]
+    }
+  }
+}

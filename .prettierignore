@@ -1,0 +1,7 @@
+node_modules
+dist
+build
+coverage
+prisma/generated
+pnpm-lock.yaml
+apps/explorer/dist

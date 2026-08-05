@@ -1,0 +1,168 @@
+// TriggersAPI Prisma schema.
+// PostgreSQL is the durable source of truth for events and delivery state.
+// IDs are UUIDv7 generated in application code (better insertion locality).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../packages/database/src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ApiKeyRole {
+  PRODUCER
+  CONSUMER
+  ADMIN
+}
+
+enum DeliveryStatus {
+  PENDING
+  LEASED
+  RETRY_SCHEDULED
+  ACKNOWLEDGED
+  DEAD_LETTER
+}
+
+model Workspace {
+  id        String   @id @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  apiKeys       ApiKey[]
+  events        Event[]
+  subscriptions Subscription[]
+
+  @@map("workspaces")
+}
+
+model ApiKey {
+  id             String     @id @db.Uuid
+  workspaceId    String     @db.Uuid
+  role           ApiKeyRole
+  name           String
+  publicPrefix   String     @unique
+  secretHash     String
+  // Consumer keys may be scoped to a single subscription (nullable = all in workspace).
+  subscriptionId String?    @db.Uuid
+  isActive       Boolean    @default(true)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(6)
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, role])
+  @@map("api_keys")
+}
+
+model Event {
+  id             String    @id @db.Uuid
+  workspaceId    String    @db.Uuid
+  source         String
+  subject        String?
+  eventType      String
+  schemaVersion  String?
+  payload        Json
+  metadata       Json      @default("{}")
+  idempotencyKey String?
+  occurredAt     DateTime? @db.Timestamptz(6)
+  receivedAt     DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt      DateTime? @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries Delivery[]
+
+  // Producer-side idempotency is enforced by a partial unique index added in a
+  // raw SQL migration: UNIQUE (workspaceId, idempotencyKey) WHERE idempotencyKey IS NOT NULL.
+  @@index([workspaceId, receivedAt])
+  @@index([workspaceId, source, eventType])
+  @@map("events")
+}
+
+model Subscription {
+  id                       String   @id @db.Uuid
+  workspaceId              String   @db.Uuid
+  name                     String
+  sourceFilter             String?
+  eventTypeFilter          String?
+  subjectFilter            String?
+  isActive                 Boolean  @default(true)
+  maxAttempts              Int      @default(5)
+  visibilityTimeoutSeconds Int      @default(60)
+  createdAt                DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime @updatedAt @db.Timestamptz(6)
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries Delivery[]
+  apiKeys    ApiKey[]
+
+  @@index([workspaceId, isActive])
+  @@map("subscriptions")
+}
+
+model Delivery {
+  id                 String         @id @db.Uuid
+  eventId            String         @db.Uuid
+  subscriptionId     String         @db.Uuid
+  workspaceId        String         @db.Uuid
+  status             DeliveryStatus @default(PENDING)
+  attemptCount       Int            @default(0)
+  availableAt        DateTime       @default(now()) @db.Timestamptz(6)
+  leasedAt           DateTime?      @db.Timestamptz(6)
+  leaseUntil         DateTime?      @db.Timestamptz(6)
+  leaseTokenHash     String?
+  consumerInstanceId String?
+  acknowledgedAt     DateTime?      @db.Timestamptz(6)
+  deadLetteredAt     DateTime?      @db.Timestamptz(6)
+  lastErrorCode      String?
+  lastErrorMessage   String?
+  replayCount        Int            @default(0)
+  createdAt          DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @db.Timestamptz(6)
+
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  subscription Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  ackReceipts  AckReceipt[]
+  replayAudits ReplayAudit[]
+
+  // One delivery per (event, subscription) pair.
+  @@unique([eventId, subscriptionId])
+  // Inbox lease query.
+  @@index([subscriptionId, status, availableAt])
+  // Lease-expiry recovery scan.
+  @@index([status, leaseUntil])
+  // Explorer / admin views.
+  @@index([workspaceId, status])
+  @@map("deliveries")
+}
+
+model AckReceipt {
+  id                String   @id @db.Uuid
+  deliveryId        String   @db.Uuid
+  consumerProcessId String
+  acknowledgedAt    DateTime @db.Timestamptz(6)
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, consumerProcessId])
+  @@map("ack_receipts")
+}
+
+model ReplayAudit {
+  id             String   @id @db.Uuid
+  deliveryId     String   @db.Uuid
+  requestedBy    String
+  reason         String?
+  previousStatus String
+  idempotencyKey String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryId])
+  @@map("replay_audits")
+}
