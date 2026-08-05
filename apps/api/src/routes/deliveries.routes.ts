@@ -6,6 +6,8 @@ import {
   ackResponseSchema,
   dataEnvelope,
   deliveryDetailSchema,
+  deliveryListItemSchema,
+  deliveryListQuerySchema,
   nackRequestSchema,
   nackResponseSchema,
   replayRequestSchema,
@@ -31,6 +33,23 @@ export async function registerDeliveryRoutes(
 ): Promise<void> {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const { deliveries, deliveryReads, replays } = deps;
+
+  r.get(
+    '/deliveries',
+    {
+      preHandler: requireRole(ApiKeyRole.ADMIN, ApiKeyRole.CONSUMER),
+      schema: {
+        tags: ['deliveries'],
+        summary: 'List deliveries with filters (admin/Explorer)',
+        querystring: deliveryListQuerySchema,
+        response: { 200: dataEnvelope(z.array(deliveryListItemSchema)) },
+      },
+    },
+    async (request, reply) => {
+      const data = await deliveryReads.list(request.principal!.workspaceId, request.query);
+      return reply.send({ data });
+    },
+  );
 
   r.post(
     '/deliveries/:deliveryId/ack',

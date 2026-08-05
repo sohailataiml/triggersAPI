@@ -49,6 +49,26 @@ export async function resolvePrincipal(
 }
 
 /**
+ * Resolve a principal from the Authorization header, falling back to a `token`
+ * query parameter. Used by the SSE stream, since EventSource cannot set headers.
+ * The token query fallback is intended for the local Explorer only.
+ */
+export async function resolvePrincipalFromRequest(
+  prisma: PrismaClient,
+  pepper: string,
+  request: FastifyRequest,
+): Promise<AuthPrincipal | null> {
+  const fromHeader = await resolvePrincipal(prisma, pepper, request.headers.authorization);
+  if (fromHeader) return fromHeader;
+
+  const query = request.query as { token?: unknown } | undefined;
+  if (query && typeof query.token === 'string' && query.token.length > 0) {
+    return resolvePrincipal(prisma, pepper, `Bearer ${query.token}`);
+  }
+  return null;
+}
+
+/**
  * Fastify preHandler factory enforcing that the request carries a valid key
  * with one of the allowed roles. Attaches the principal to the request.
  */
@@ -70,6 +90,27 @@ export function requireRole(...roles: ApiKeyRole[]) {
       throw new ForbiddenError(`This operation requires one of roles: ${roles.join(', ')}`);
     }
 
+    request.principal = principal;
+  };
+}
+
+/** Like requireRole but also accepts a `token` query param (for SSE/EventSource). */
+export function requireRoleAllowQueryToken(...roles: ApiKeyRole[]) {
+  return async function authPreHandler(
+    request: FastifyRequest,
+    _reply: FastifyReply,
+  ): Promise<void> {
+    const principal = await resolvePrincipalFromRequest(
+      request.server.prisma,
+      request.server.appConfig.API_KEY_PEPPER,
+      request,
+    );
+    if (!principal) {
+      throw new UnauthorizedError();
+    }
+    if (roles.length > 0 && !roles.includes(principal.role)) {
+      throw new ForbiddenError(`This operation requires one of roles: ${roles.join(', ')}`);
+    }
     request.principal = principal;
   };
 }

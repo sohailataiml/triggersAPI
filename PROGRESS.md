@@ -84,3 +84,16 @@ Verified:
 
 - **Integration tests: 23 passing** (added 4 long-poll). Immediate availability (<2s), **wake-after-ingest via Pub/Sub (~0.7s, well under the 15s wait)**, timeout returns empty at ~2s, active-poll gauge returns to 0 after completion.
 - `pnpm typecheck` ✅, `pnpm lint` ✅.
+
+## Phase 6 — Explorer UI + SSE ✅
+
+Created:
+
+- API: `GET /v1/explorer/stream` (SSE via Redis Streams `XREAD BLOCK`, `Last-Event-ID`, heartbeats, disconnect cleanup), `GET /v1/explorer/overview` (aggregate counts), `GET /v1/deliveries` (filtered list). Query-token auth for EventSource.
+- `apps/explorer` React/Vite app: connection settings (localStorage), overview stat cards, **live SSE activity stream**, ingest form, subscription create/list, deliveries table with status badges + source/status/subscription filters, delivery detail drawer, **Retry Now** on dead-letter rows (calls replay). Dark "control-room" theme.
+
+Verified:
+
+- **Integration tests: 25 passing** (added explorer overview + list).
+- **Live browser verification**: loaded Explorer, connected with seeded tokens (SSE "stream live"), seeded subscription rendered, **ingested an event via the UI → PENDING delivery appeared in the table and INGESTED/CREATED streamed live over SSE**, overview updated (1 event / 1 pending).
+- Explorer `typecheck` ✅, `vite build` ✅ (50 KB gzip), `pnpm lint` ✅.

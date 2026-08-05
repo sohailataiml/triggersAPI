@@ -9,6 +9,7 @@ import { registerSubscriptionRoutes } from './subscriptions.routes.js';
 import { registerEventRoutes } from './events.routes.js';
 import { registerInboxRoutes } from './inbox.routes.js';
 import { registerDeliveryRoutes } from './deliveries.routes.js';
+import { registerExplorerRoutes } from './explorer.routes.js';
 
 /**
  * Registers all versioned (/v1) routes, wiring services from the decorated
@@ -26,4 +27,5 @@ export async function registerV1Routes(app: FastifyInstance): Promise<void> {
   await registerEventRoutes(app, ingestion);
   await registerInboxRoutes(app, { deliveries, subscriptions, longPoll });
   await registerDeliveryRoutes(app, { deliveries, deliveryReads, replays });
+  await registerExplorerRoutes(app, deliveryReads);
 }
