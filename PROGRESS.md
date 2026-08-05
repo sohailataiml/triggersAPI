@@ -34,3 +34,20 @@ Verified:
 - `pnpm install` (9 projects), `pnpm db:generate`, migration `20260805174754_init` applied (incl. partial idempotency unique index).
 - `pnpm typecheck` ✅ (8 projects), `pnpm lint` ✅, `pnpm test` ✅ (domain: 14 unit tests).
 - API boots against live PG (5433) + Redis (6380): `/health/live` ok, `/health/ready` reports `postgres: ok, redis: ok`, `/metrics` serves Prometheus text, `/docs` + `/openapi.json` serve the OpenAPI spec, error envelope confirmed.
+
+## Phase 3 — First vertical slice ✅
+
+Created:
+
+- Services: `SubscriptionService`, `EventIngestionService` (transactional event + delivery fan-out, idempotency, post-commit wake-ups/activity), `DeliveryService` (`FOR UPDATE SKIP LOCKED` lease + overdue-lease recovery; idempotent ACK via ack receipts).
+- Routes (`/v1`): `POST /events`, `POST/GET/PATCH /subscriptions`, `GET /inbox`, `POST /deliveries/:id/ack`. Role-scoped auth (producer/consumer/admin).
+- Success envelope `{ data }` alongside error envelope `{ error }` (contracts `dataEnvelope`).
+- `prisma/seed.ts` (workspace + demo subscription + tokens), integration test harness (`buildTestApp`, `resetDatabase`, `seedWorkspaceAndKeys`).
+
+Verified:
+
+- **Integration tests: 11 passing** against real PG/Redis — full slice (subscribe→ingest→lease→ack→ACKNOWLEDGED in PG), non-matching subscription, ingest validation/authz, idempotent ingest, idempotent ACK (same process id), cross-process ACK returns current state, invalid lease token → 409 LEASE_CONFLICT, missing process-id header → 400.
+- Live curl smoke: ingest 201, lease, ACK, idempotent repeat ACK (`duplicateAck: true`), metrics increment.
+- `pnpm typecheck` ✅, `pnpm lint` ✅, unit tests ✅.
+
+**Design decision:** all success responses use a `{ data: ... }` envelope (matching the task's "API expectations" example and mirroring the `{ error: ... }` envelope) — the architecture doc's flat examples are wrapped consistently.

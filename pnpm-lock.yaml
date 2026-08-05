@@ -11,6 +11,15 @@ importers:
       '@prisma/client':
         specifier: ^6.1.0
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      '@triggers/config':
+        specifier: workspace:*
+        version: link:packages/config
+      '@triggers/database':
+        specifier: workspace:*
+        version: link:packages/database
+      '@triggers/domain':
+        specifier: workspace:*
+        version: link:packages/domain
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0
