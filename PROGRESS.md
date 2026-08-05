@@ -69,4 +69,18 @@ Verified:
 - `pnpm typecheck` ✅, `pnpm lint` ✅.
 
 ### ⚠️ Environment note — OneDrive vs. node_modules
+
 Mid-build, OneDrive "Files On-Demand" dehydrated `node_modules` into cloud placeholders; Node's `readFileSync` fails on those (`EBADF`/`UNKNOWN`), breaking `tsc`/`vitest`. Fix applied: **stopped the OneDrive process and reinstalled `node_modules` fresh** (real local files). OneDrive is left stopped for the remainder of the build. **Recommendation:** move this repo outside OneDrive (e.g. `C:\dev\TriggersAPI`) or exclude `node_modules` from OneDrive sync — otherwise placeholders will recur. Restart OneDrive when done.
+
+## Phase 5 — Real-time long polling ✅
+
+Created:
+
+- `LongPollService` implementing **query → subscribe → query → wait → query** with per-subscription Redis Pub/Sub wake-ups. The second query closes the missed-wake-up race. Includes: max-wait clamp (`MAX_LONG_POLL_SECONDS`), per-API-key active-poll limit (Redis counter with TTL), client-disconnect abort (`AbortController` on `request.raw` close), and **Redis-down fallback to periodic DB polling**.
+- Metrics wired: `triggers_long_poll_active` gauge, `triggers_long_poll_wait_seconds` histogram.
+- Inbox route now honours `?wait=<seconds>`.
+
+Verified:
+
+- **Integration tests: 23 passing** (added 4 long-poll). Immediate availability (<2s), **wake-after-ingest via Pub/Sub (~0.7s, well under the 15s wait)**, timeout returns empty at ~2s, active-poll gauge returns to 0 after completion.
+- `pnpm typecheck` ✅, `pnpm lint` ✅.

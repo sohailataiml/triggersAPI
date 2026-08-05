@@ -9,13 +9,20 @@ import {
 import { ApiKeyRole, requireRole } from '../services/auth.service.js';
 import type { DeliveryService } from '../services/delivery.service.js';
 import type { SubscriptionService } from '../services/subscription.service.js';
+import type { LongPollService } from '../services/long-poll.service.js';
+
+export interface InboxRouteDeps {
+  deliveries: DeliveryService;
+  subscriptions: SubscriptionService;
+  longPoll: LongPollService;
+}
 
 export async function registerInboxRoutes(
   app: FastifyInstance,
-  deliveries: DeliveryService,
-  subscriptions: SubscriptionService,
+  deps: InboxRouteDeps,
 ): Promise<void> {
   const r = app.withTypeProvider<ZodTypeProvider>();
+  const { deliveries, subscriptions, longPoll } = deps;
 
   r.get(
     '/inbox',
@@ -23,7 +30,7 @@ export async function registerInboxRoutes(
       preHandler: requireRole(ApiKeyRole.CONSUMER),
       schema: {
         tags: ['inbox'],
-        summary: 'Lease available deliveries for a subscription',
+        summary: 'Lease available deliveries; optionally long-poll with ?wait=<seconds>',
         querystring: inboxQuerySchema,
         response: { 200: dataEnvelope(inboxResponseSchema) },
       },
@@ -43,15 +50,36 @@ export async function registerInboxRoutes(
       const visibilityTimeoutSeconds =
         query.visibilityTimeout ?? subscription.visibilityTimeoutSeconds;
 
-      const items = await deliveries.lease({
-        workspaceId: principal.workspaceId,
-        subscriptionId: query.subscriptionId,
-        limit: query.limit,
-        visibilityTimeoutSeconds,
-        consumerInstanceId: query.consumerInstanceId ?? null,
-      });
+      // Clamp wait to the configured maximum.
+      const waitSeconds = Math.min(query.wait, app.appConfig.MAX_LONG_POLL_SECONDS);
 
-      return reply.send({ data: { items, nextPollAfterMs: 0 } });
+      const attempt = () =>
+        deliveries.lease({
+          workspaceId: principal.workspaceId,
+          subscriptionId: query.subscriptionId,
+          limit: query.limit,
+          visibilityTimeoutSeconds,
+          consumerInstanceId: query.consumerInstanceId ?? null,
+        });
+
+      // Abort the poll cleanly if the client disconnects.
+      const controller = new AbortController();
+      const onClose = () => controller.abort();
+      request.raw.on('close', onClose);
+
+      try {
+        const items = await longPoll.poll({
+          subscriptionId: query.subscriptionId,
+          apiKeyPrefix: principal.apiKeyId,
+          waitSeconds,
+          maxActivePerKey: app.appConfig.MAX_ACTIVE_LONG_POLLS_PER_KEY,
+          attempt,
+          signal: controller.signal,
+        });
+        return await reply.send({ data: { items, nextPollAfterMs: 0 } });
+      } finally {
+        request.raw.removeListener('close', onClose);
+      }
     },
   );
 }

@@ -4,6 +4,7 @@ import { EventIngestionService } from '../services/event-ingestion.service.js';
 import { DeliveryService } from '../services/delivery.service.js';
 import { DeliveryReadService } from '../services/delivery-read.service.js';
 import { ReplayService } from '../services/replay.service.js';
+import { LongPollService } from '../services/long-poll.service.js';
 import { registerSubscriptionRoutes } from './subscriptions.routes.js';
 import { registerEventRoutes } from './events.routes.js';
 import { registerInboxRoutes } from './inbox.routes.js';
@@ -19,9 +20,10 @@ export async function registerV1Routes(app: FastifyInstance): Promise<void> {
   const deliveries = new DeliveryService(app.prisma, app.appConfig, app.activity, app.metrics);
   const deliveryReads = new DeliveryReadService(app.prisma);
   const replays = new ReplayService(app.prisma, app.activity, app.metrics);
+  const longPoll = new LongPollService(app.redis, app.metrics, app.log);
 
   await registerSubscriptionRoutes(app, subscriptions);
   await registerEventRoutes(app, ingestion);
-  await registerInboxRoutes(app, deliveries, subscriptions);
+  await registerInboxRoutes(app, { deliveries, subscriptions, longPoll });
   await registerDeliveryRoutes(app, { deliveries, deliveryReads, replays });
 }
