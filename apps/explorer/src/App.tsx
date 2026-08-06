@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { KeyRound } from 'lucide-react';
 import { ApiClient } from './api';
 import { useSSE } from './useSSE';
-import type { DeliveryListItem, Overview, Settings, Subscription } from './types';
-import { SettingsBar } from './components/SettingsBar';
-import { OverviewCards } from './components/Overview';
-import { ActivityStream } from './components/ActivityStream';
-import { IngestForm } from './components/IngestForm';
-import { Subscriptions } from './components/Subscriptions';
-import { Deliveries } from './components/Deliveries';
-import { ConsumerConsole } from './components/ConsumerConsole';
+import { ApiProvider } from './app/apiContext';
+import { useInvalidateAll } from './hooks/queries';
+import { Header } from './components/layout/Header';
+import type { Section } from './components/layout/Navigation';
+import { SettingsDrawer } from './components/layout/SettingsDrawer';
+import { Dashboard } from './pages/Dashboard';
+import { Pipeline } from './pages/Pipeline';
+import { Events } from './pages/Events';
+import { System } from './pages/System';
+import type { Settings } from './types';
 
 const STORAGE_KEY = 'triggers-explorer-settings';
 
@@ -16,7 +19,6 @@ function loadSettings(): Settings {
   const defaults: Settings = { apiBase: '', adminToken: '', producerToken: '', consumerToken: '' };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    // Merge over defaults so settings saved before a field existed stay valid.
     if (raw) return { ...defaults, ...(JSON.parse(raw) as Partial<Settings>) };
   } catch {
     // ignore
@@ -26,110 +28,79 @@ function loadSettings(): Settings {
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [deliveries, setDeliveries] = useState<DeliveryListItem[]>([]);
-  const [filters, setFilters] = useState({ status: '', subscriptionId: '', source: '' });
-  const [error, setError] = useState<string | null>(null);
+  const [section, setSection] = useState<Section>('dashboard');
+  const [settingsOpen, setSettingsOpen] = useState(!loadSettings().adminToken);
 
   const api = useMemo(() => new ApiClient(settings), [settings]);
-  const { activities, connected, bump } = useSSE(settings.apiBase, settings.adminToken);
+  const invalidate = useInvalidateAll();
+
+  // Coalesce bursts of SSE frames into one refetch; reconcile fully on reconnect.
+  const debounceRef = useRef<number | undefined>(undefined);
+  const debouncedInvalidate = useCallback(() => {
+    window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(invalidate, 300);
+  }, [invalidate]);
+
+  useSSE(settings.apiBase, settings.adminToken, {
+    onFresh: debouncedInvalidate,
+    onReconnect: invalidate,
+  });
 
   const saveSettings = (s: Settings) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
     setSettings(s);
   };
 
-  const refresh = useCallback(async () => {
-    if (!settings.adminToken) return;
-    setError(null);
-    try {
-      const [ov, subs, dels] = await Promise.all([
-        api.overview(),
-        api.subscriptions(),
-        api.deliveries(filters),
-      ]);
-      setOverview(ov);
-      setSubscriptions(subs);
-      setDeliveries(dels);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load data');
-    }
-  }, [api, settings.adminToken, filters]);
-
-  // Initial + filter-driven load.
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  // Refresh (debounced) whenever new activity arrives over SSE.
-  const bumpTimer = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    if (!bump) return;
-    window.clearTimeout(bumpTimer.current);
-    bumpTimer.current = window.setTimeout(() => void refresh(), 300);
-    return () => window.clearTimeout(bumpTimer.current);
-  }, [bump, refresh]);
-
   const configured = Boolean(settings.adminToken);
 
   return (
-    <div className="app">
-      <header className="masthead">
-        <div>
-          <h1>
-            Triggers<span className="accent">API</span> Explorer
-          </h1>
-          <div className="tagline">event ingestion · lease delivery · retries · dead-letter</div>
-        </div>
-        <span className={`conn ${connected ? 'live' : ''}`}>
-          <span className="dot" /> {connected ? 'stream live' : 'stream offline'}
-        </span>
-      </header>
+    <ApiProvider api={api} settings={settings}>
+      <Header
+        active={section}
+        onNavigate={setSection}
+        onOpenSettings={() => setSettingsOpen(true)}
+        configured={configured}
+      />
 
-      <SettingsBar settings={settings} onSave={saveSettings} />
+      <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6">
+        {!configured ? (
+          <SetupHero onOpenSettings={() => setSettingsOpen(true)} />
+        ) : section === 'dashboard' ? (
+          <Dashboard />
+        ) : section === 'pipeline' ? (
+          <Pipeline />
+        ) : section === 'events' ? (
+          <Events />
+        ) : (
+          <System />
+        )}
+      </main>
 
-      {!configured && (
-        <div className="setup-note">
-          Add your ADMIN and PRODUCER tokens in <b>Connection settings</b> to begin. Run{' '}
-          <code>pnpm db:seed</code> to generate them.
-        </div>
-      )}
+      <SettingsDrawer
+        open={settingsOpen}
+        settings={settings}
+        onClose={() => setSettingsOpen(false)}
+        onSave={saveSettings}
+      />
+    </ApiProvider>
+  );
+}
 
-      {error && <div className="setup-note err">{error}</div>}
-
-      {configured && (
-        <>
-          <div className="panel">
-            <h2>Overview</h2>
-            <OverviewCards data={overview} />
-          </div>
-
-          <div className="grid">
-            <div>
-              <IngestForm api={api} onIngested={refresh} />
-              <ConsumerConsole
-                api={api}
-                subscriptions={subscriptions}
-                hasToken={Boolean(settings.consumerToken)}
-                onChange={refresh}
-              />
-              <Subscriptions api={api} subscriptions={subscriptions} onChange={refresh} />
-              <Deliveries
-                api={api}
-                deliveries={deliveries}
-                subscriptions={subscriptions}
-                filters={filters}
-                setFilters={setFilters}
-                onChange={refresh}
-              />
-            </div>
-            <div>
-              <ActivityStream activities={activities} connected={connected} />
-            </div>
-          </div>
-        </>
-      )}
+function SetupHero({ onOpenSettings }: { onOpenSettings: () => void }) {
+  return (
+    <div className="mx-auto mt-16 max-w-lg text-center">
+      <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-accent/30 bg-accent-soft text-accent shadow-glow">
+        <KeyRound size={24} aria-hidden />
+      </span>
+      <h2 className="mt-5 text-lg font-semibold text-text">Connect to your workspace</h2>
+      <p className="mt-2 text-sm text-muted">
+        Paste the ADMIN and PRODUCER tokens printed by{' '}
+        <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">pnpm db:seed</code>{' '}
+        to start ingesting events and watching them flow through the pipeline.
+      </p>
+      <button type="button" className="btn btn-primary mx-auto mt-5" onClick={onOpenSettings}>
+        Open connection settings
+      </button>
     </div>
   );
 }

@@ -47,6 +47,22 @@ export interface DeliveryDetail extends Omit<DeliveryListItem, 'event'> {
   updatedAt: string;
 }
 
+/** An event-centric row for the Events page (GET /v1/events). */
+export interface EventListItem {
+  id: string;
+  source: string;
+  eventType: string;
+  subject: string | null;
+  receivedAt: string;
+  occurredAt: string | null;
+  deliveryCount: number;
+  pending: number;
+  leased: number;
+  retryScheduled: number;
+  acknowledged: number;
+  deadLetter: number;
+}
+
 export type ActivityType =
   | 'event.ingested'
   | 'delivery.created'

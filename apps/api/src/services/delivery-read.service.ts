@@ -5,6 +5,8 @@ import {
   type DeliveryDetail,
   type DeliveryListItem,
   type DeliveryListQuery,
+  type EventListItem,
+  type EventListQuery,
   type ExplorerOverview,
 } from '@triggers/contracts';
 
@@ -75,6 +77,52 @@ export class DeliveryReadService {
         subject: d.event.subject,
       },
     }));
+  }
+
+  /**
+   * Event-centric list with a per-status delivery rollup, for the Events page.
+   * `status` matches events that have at least one delivery in that status;
+   * `search` is a case-insensitive contains over source/eventType/subject.
+   */
+  async listEvents(workspaceId: string, query: EventListQuery): Promise<EventListItem[]> {
+    const rows = await this.prisma.event.findMany({
+      where: {
+        workspaceId,
+        source: query.source,
+        eventType: query.eventType,
+        ...(query.status ? { deliveries: { some: { status: query.status } } } : {}),
+        ...(query.search
+          ? {
+              OR: [
+                { source: { contains: query.search, mode: 'insensitive' } },
+                { eventType: { contains: query.search, mode: 'insensitive' } },
+                { subject: { contains: query.search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      include: { deliveries: { select: { status: true } } },
+      orderBy: { receivedAt: 'desc' },
+      take: query.limit,
+    });
+
+    return rows.map((e) => {
+      const count = (s: DeliveryStatus) => e.deliveries.filter((d) => d.status === s).length;
+      return {
+        id: e.id,
+        source: e.source,
+        eventType: e.eventType,
+        subject: e.subject,
+        receivedAt: e.receivedAt.toISOString(),
+        occurredAt: e.occurredAt?.toISOString() ?? null,
+        deliveryCount: e.deliveries.length,
+        pending: count(DeliveryStatus.PENDING),
+        leased: count(DeliveryStatus.LEASED),
+        retryScheduled: count(DeliveryStatus.RETRY_SCHEDULED),
+        acknowledged: count(DeliveryStatus.ACKNOWLEDGED),
+        deadLetter: count(DeliveryStatus.DEAD_LETTER),
+      };
+    });
   }
 
   /** Aggregate counts for the Explorer overview dashboard. */

@@ -127,3 +127,54 @@ All completion criteria met: starts via Docker Compose; migrations run; API/work
 Postgres/Explorer start locally; end-to-end delivery flow works; retries + dead-letter replay
 work; long polling works; Explorer receives live SSE updates; tests + typecheck + lint pass;
 OpenAPI available at `/docs`; README has exact setup + demo instructions.
+
+---
+
+## Explorer redesign — Live event operations console ✅ (Dashboard-first pass)
+
+Redesigned the Explorer from an admin-table dashboard into a polished, live event-operations
+console (Stripe/Linear-restrained dark theme) that tells the reliability story at a glance:
+**ingest → store → match → pending → lease → ack → (retry → dead-letter → replay)**.
+
+### Stack added (Explorer)
+
+- **Tailwind CSS** (token-driven, 7-stage status system) · **TanStack Query** (server state +
+  SSE-driven invalidation + reconnect reconciliation) · **framer-motion** (pipeline token motion,
+  reduced-motion safe) · **lucide-react** (icons) · **zustand** (SSE activity store, dedup by
+  stream id) · **Vitest + Testing Library** (14 Explorer tests).
+
+### New architecture
+
+- `lib/` status system, formatters, source/preset metadata.
+- `store/eventStore.ts` — single SSE source of truth, dedup by Redis stream id, bounded.
+- `useSSE.ts` — extended to feed the store, fire debounced refetch on fresh frames, and
+  reconcile from REST on reconnect (Postgres stays authoritative).
+- `app/apiContext` + `hooks/queries` — typed query layer over the existing `ApiClient`.
+- `components/{layout,dashboard,events,shared}` + `pages/{Dashboard,Pipeline,Events,System}`.
+- 4-section shell: **Dashboard** (KPIs, live pipeline, composer, consumer simulator,
+  dead-letter recovery, humanized activity), **Pipeline**, **Events** (new endpoint), **System**
+  (real `/health/ready`).
+
+### Backend (one small, approved read-only addition)
+
+- **`GET /v1/events`** (admin/consumer) — event-centric list with a per-status delivery rollup,
+  filters (`source`/`eventType`/`status`/`search`/`limit`). New `deliveryReads.listEvents`,
+  contract `eventListItem`/`eventListQuery`. No other backend changes.
+
+### Data honesty
+
+- No fabricated trends/charts — the platform keeps no metrics history; success rate is derived
+  from real terminal counts, and the System page states point-in-time limits explicitly.
+
+### Verified
+
+- `pnpm --filter @triggers/explorer typecheck` ✅ · `build` ✅ (119 KB gzip JS, 5.5 KB CSS) ·
+  `test` ✅ (14) · API `typecheck` ✅ · root `lint`/`format` ✅.
+- Live: API restarted on :3010, Vite on :5173. Dashboard renders with live data; `GET /v1/events`
+  returns correct rollups through the Vite proxy; **zero browser console errors** (fixed a pnpm
+  duplicate-React dev issue via `resolve.dedupe`). Ingest → overview → Events all confirmed.
+
+### Deferred to the expand pass
+
+Pipeline "demo mode" + attempt timelines, subscription create/manage drawer, Recharts (needs a
+metrics history store), optional MCP chat.

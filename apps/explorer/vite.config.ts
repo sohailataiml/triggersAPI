@@ -9,6 +9,15 @@ const apiTarget = process.env.VITE_API_PROXY ?? 'http://127.0.0.1:3000';
 
 export default defineConfig({
   plugins: [react()],
+  // pnpm's isolated node_modules can surface more than one copy of React to the
+  // dev server (framer-motion / react-query pull their own peer link), which
+  // triggers "Invalid hook call". Force a single copy.
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react/jsx-runtime'],
+  },
   server: {
     port: 5173,
     proxy: {

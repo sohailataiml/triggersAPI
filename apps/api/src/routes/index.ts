@@ -24,7 +24,7 @@ export async function registerV1Routes(app: FastifyInstance): Promise<void> {
   const longPoll = new LongPollService(app.redis, app.metrics, app.log);
 
   await registerSubscriptionRoutes(app, subscriptions);
-  await registerEventRoutes(app, ingestion);
+  await registerEventRoutes(app, ingestion, deliveryReads);
   await registerInboxRoutes(app, { deliveries, subscriptions, longPoll });
   await registerDeliveryRoutes(app, { deliveries, deliveryReads, replays });
   await registerExplorerRoutes(app, deliveryReads);

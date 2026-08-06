@@ -1,6 +1,7 @@
 import type {
   DeliveryDetail,
   DeliveryListItem,
+  EventListItem,
   LeasedItem,
   Overview,
   Settings,
@@ -62,16 +63,34 @@ export class ApiClient {
     return this.request(`/v1/deliveries/${id}`, this.settings.adminToken);
   }
 
-  ingest(input: {
-    source: string;
-    eventType: string;
-    subject?: string;
-    payload: Record<string, unknown>;
-  }): Promise<{ eventId: string; duplicate: boolean; matchedSubscriptions: number }> {
+  ingest(
+    input: {
+      source: string;
+      eventType: string;
+      subject?: string;
+      payload: Record<string, unknown>;
+      metadata?: Record<string, unknown>;
+      occurredAt?: string;
+    },
+    idempotencyKey?: string,
+  ): Promise<{ eventId: string; duplicate: boolean; matchedSubscriptions: number }> {
     return this.request('/v1/events', this.settings.producerToken, {
       method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
       body: JSON.stringify(input),
     });
+  }
+
+  events(params: {
+    source?: string;
+    eventType?: string;
+    status?: string;
+    search?: string;
+  }): Promise<EventListItem[]> {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+    const qs = q.toString();
+    return this.request(`/v1/events${qs ? `?${qs}` : ''}`, this.settings.adminToken);
   }
 
   updateSubscription(id: string, patch: { maxAttempts?: number }): Promise<Subscription> {
