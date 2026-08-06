@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { LivePipeline } from '../components/dashboard/LivePipeline';
-import { EventDetailDrawer } from '../components/events/EventDetailDrawer';
 import { EventFocusCard } from '../components/pipeline/EventFocusCard';
 import { DemoMode } from '../components/pipeline/DemoMode';
 import { PIPELINE_STAGES } from '../hooks/useRecentEvents';
@@ -65,7 +64,6 @@ export function Pipeline() {
         </div>
       </div>
 
-      <EventDetailDrawer eventId={selectedEventId} onClose={() => setSelectedEventId(null)} />
       <DemoMode
         open={demoOpen}
         onClose={() => setDemoOpen(false)}

@@ -122,6 +122,11 @@ export class ApiClient {
     });
   }
 
+  /** Demo-safe reset: clears events/deliveries for the workspace (keeps keys). */
+  reset(): Promise<{ eventsDeleted: number }> {
+    return this.request('/v1/explorer/reset', this.settings.adminToken, { method: 'POST' });
+  }
+
   replay(deliveryId: string, reason: string): Promise<unknown> {
     return this.request(`/v1/deliveries/${deliveryId}/replay`, this.settings.adminToken, {
       method: 'POST',

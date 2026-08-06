@@ -1,6 +1,7 @@
 import { Settings2, Zap } from 'lucide-react';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { Navigation, type Section } from './Navigation';
+import { ResetButton } from './ResetButton';
 
 export function Header({
   active,
@@ -37,6 +38,7 @@ export function Header({
             local
           </span>
           <ConnectionIndicator />
+          {configured && <ResetButton />}
           <button
             type="button"
             onClick={onOpenSettings}

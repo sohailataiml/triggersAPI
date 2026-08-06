@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { dataEnvelope, explorerOverviewSchema } from '@triggers/contracts';
 import { ApiKeyRole, requireRole, requireRoleAllowQueryToken } from '../services/auth.service.js';
 import type { DeliveryReadService } from '../services/delivery-read.service.js';
+import { AdminService } from '../services/admin.service.js';
 import { EXPLORER_ACTIVITY_STREAM } from '../lib/keys.js';
 
 const HEARTBEAT_MS = 15_000;
@@ -13,6 +15,27 @@ export async function registerExplorerRoutes(
   deliveryReads: DeliveryReadService,
 ): Promise<void> {
   const r = app.withTypeProvider<ZodTypeProvider>();
+  const admin = new AdminService(app.prisma, {
+    maxAttempts: app.appConfig.DEFAULT_MAX_ATTEMPTS,
+    visibilityTimeoutSeconds: app.appConfig.DEFAULT_VISIBILITY_TIMEOUT_SECONDS,
+  });
+
+  // Demo-safe reset: clear this workspace's events/deliveries; keep subs + keys.
+  r.post(
+    '/explorer/reset',
+    {
+      preHandler: requireRole(ApiKeyRole.ADMIN),
+      schema: {
+        tags: ['explorer'],
+        summary: 'Clear all events/deliveries for the workspace (keeps subscriptions + keys)',
+        response: { 200: dataEnvelope(z.object({ eventsDeleted: z.number().int() })) },
+      },
+    },
+    async (request, reply) => {
+      const data = await admin.resetWorkspace(request.principal!.workspaceId);
+      return reply.send({ data });
+    },
+  );
 
   r.get(
     '/explorer/overview',
