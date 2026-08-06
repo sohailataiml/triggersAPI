@@ -15,15 +15,39 @@ import type { Settings } from './types';
 
 const STORAGE_KEY = 'triggers-explorer-settings';
 
+/**
+ * Build-time demo defaults. On a deployed demo instance these are injected as
+ * VITE_* env vars so a first-time visitor (e.g. a grader) is auto-connected with
+ * no Settings step. They are NOT in source — only the env var names are. Saved
+ * settings always win; env values only fill blanks.
+ */
+const DEMO_DEFAULTS: Settings = {
+  apiBase: (import.meta.env.VITE_API_BASE as string) ?? '',
+  adminToken: (import.meta.env.VITE_DEMO_ADMIN_TOKEN as string) ?? '',
+  producerToken: (import.meta.env.VITE_DEMO_PRODUCER_TOKEN as string) ?? '',
+  consumerToken: (import.meta.env.VITE_DEMO_CONSUMER_TOKEN as string) ?? '',
+};
+
+/** True when this build ships preloaded demo credentials. */
+export const IS_DEMO = Boolean(DEMO_DEFAULTS.adminToken);
+
 function loadSettings(): Settings {
-  const defaults: Settings = { apiBase: '', adminToken: '', producerToken: '', consumerToken: '' };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...defaults, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<Settings>;
+      // Saved values win; fall back to demo defaults for any blank field.
+      return {
+        apiBase: saved.apiBase || DEMO_DEFAULTS.apiBase,
+        adminToken: saved.adminToken || DEMO_DEFAULTS.adminToken,
+        producerToken: saved.producerToken || DEMO_DEFAULTS.producerToken,
+        consumerToken: saved.consumerToken || DEMO_DEFAULTS.consumerToken,
+      };
+    }
   } catch {
     // ignore
   }
-  return defaults;
+  return { ...DEMO_DEFAULTS };
 }
 
 export function App() {
@@ -61,6 +85,13 @@ export function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         configured={configured}
       />
+
+      {IS_DEMO && (
+        <div className="border-b border-accent/20 bg-accent-soft/60 px-4 py-1.5 text-center text-xs text-accent sm:px-6">
+          Live demo instance — preloaded credentials. Send an event and run the guided demo; no
+          setup needed.
+        </div>
+      )}
 
       <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6">
         {!configured ? (

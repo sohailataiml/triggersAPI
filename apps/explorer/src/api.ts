@@ -21,10 +21,21 @@ export class ApiClient {
         ...(init.headers ?? {}),
       },
     });
-    const body = await res.json().catch(() => ({}));
+    const contentType = res.headers.get('content-type') ?? '';
+    const isJson = contentType.includes('application/json');
+    const body = isJson ? await res.json().catch(() => ({})) : null;
     if (!res.ok) {
       const message = body?.error?.message ?? `Request failed (${res.status})`;
       throw new Error(message);
+    }
+    // A non-JSON 200 means the request never reached the API — typically a wrong
+    // "API base" so a static host returned its SPA index.html. Fail loudly
+    // instead of silently treating it as empty data.
+    if (!isJson) {
+      throw new Error(
+        `Expected JSON from ${path} but received ${contentType || 'a non-JSON response'}. ` +
+          'Check that "API base" in Settings points to the API, not the web app.',
+      );
     }
     return body.data as T;
   }
