@@ -1,0 +1,120 @@
+# Render Blueprint for TriggersAPI.
+#
+# Apply it from the Render dashboard: New -> Blueprint -> pick this repo/branch.
+# Render provisions everything below and wires the env vars via references.
+#
+# Free tier is used throughout for a demo. Notes:
+#   - Free PostgreSQL is deleted by Render after ~30 days.
+#   - Free web services spin down when idle (~50s cold start on next request).
+# Bump each `plan: free` to `starter` for always-on, durable infrastructure.
+#
+# After the first deploy:
+#   1. The API applies migrations automatically on boot (`pnpm db:deploy`).
+#   2. Seed demo tokens once: open the API service Shell in Render and run
+#        pnpm db:seed
+#      Copy the printed ADMIN / PRODUCER / CONSUMER tokens.
+#   3. Open the Explorer URL, click Settings, set "API base" to the API's URL
+#      (https://triggers-api.onrender.com), and paste the tokens.
+#   4. If the API's CORS_ORIGINS default below doesn't match the Explorer's
+#      actual URL, update it on the triggers-api service and redeploy.
+
+databases:
+  - name: triggers-postgres
+    plan: free
+    region: oregon
+    databaseName: triggers
+    user: triggers
+
+services:
+  # --- Redis-compatible coordination store (Pub/Sub + Explorer SSE streams) ---
+  - type: keyvalue
+    name: triggers-redis
+    plan: free
+    region: oregon
+    ipAllowList: [] # internal connections only
+
+  # --- API (Fastify). Runs migrations on boot, then serves /v1 + SSE. ---
+  - type: web
+    name: triggers-api
+    runtime: docker
+    repo: https://github.com/sohailataiml/triggersAPI
+    branch: explorer-redesign
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /health/ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        fromDatabase:
+          name: triggers-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: triggers-redis
+          property: connectionString
+      - key: API_KEY_PEPPER
+        generateValue: true
+      - key: LEASE_TOKEN_SECRET
+        generateValue: true
+      # Cross-origin: the static Explorer calls this API directly. Set this to
+      # the Explorer's real URL after the first deploy if it differs.
+      - key: CORS_ORIGINS
+        value: https://triggers-explorer.onrender.com
+
+  # --- Worker (BullMQ): recovers expired leases on a schedule. ---
+  - type: worker
+    name: triggers-worker
+    runtime: docker
+    repo: https://github.com/sohailataiml/triggersAPI
+    branch: explorer-redesign
+    dockerfilePath: ./apps/worker/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        fromDatabase:
+          name: triggers-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: triggers-redis
+          property: connectionString
+      # Share the API's generated secrets so both processes agree.
+      - key: API_KEY_PEPPER
+        fromService:
+          type: web
+          name: triggers-api
+          envVarKey: API_KEY_PEPPER
+      - key: LEASE_TOKEN_SECRET
+        fromService:
+          type: web
+          name: triggers-api
+          envVarKey: LEASE_TOKEN_SECRET
+
+  # --- Explorer (Vite static site). The browser calls the API cross-origin;
+  #     set "API base" in the app's Settings to the API URL after deploy. ---
+  - type: web
+    name: triggers-explorer
+    runtime: static
+    repo: https://github.com/sohailataiml/triggersAPI
+    branch: explorer-redesign
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @triggers/explorer build
+    staticPublishPath: apps/explorer/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
