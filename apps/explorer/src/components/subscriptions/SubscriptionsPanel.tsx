@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { useDeliveries, useSubscriptions, useUpdateSubscription } from '../../hooks/queries';
+import {
+  useDeleteSubscription,
+  useDeliveries,
+  useSubscriptions,
+  useUpdateSubscription,
+} from '../../hooks/queries';
 import { SubscriptionCard, type SubscriptionRollup } from './SubscriptionCard';
 import { SubscriptionFormDrawer } from './SubscriptionFormDrawer';
 import { EmptyState, ErrorState, LoadingSkeleton } from '../shared/States';
@@ -22,10 +27,12 @@ export function SubscriptionsPanel() {
   const { data: subscriptions = [], isLoading, error, refetch } = useSubscriptions();
   const { data: deliveries = [] } = useDeliveries({});
   const update = useUpdateSubscription();
+  const remove = useDeleteSubscription();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Subscription | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const rollups = useMemo(() => {
     const map = new Map<string, SubscriptionRollup>();
@@ -47,6 +54,14 @@ export function SubscriptionsPanel() {
       await update.mutateAsync({ id: sub.id, patch: { isActive: !sub.isActive } });
     } finally {
       setTogglingId(null);
+    }
+  }
+  async function removeSub(sub: Subscription) {
+    setDeletingId(sub.id);
+    try {
+      await remove.mutateAsync(sub.id);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -93,7 +108,9 @@ export function SubscriptionsPanel() {
               rollup={rollups.get(s.id) ?? { pending: 0, latest: null }}
               onEdit={() => openEdit(s)}
               onToggleActive={() => toggleActive(s)}
+              onDelete={() => removeSub(s)}
               toggling={togglingId === s.id}
+              deleting={deletingId === s.id}
             />
           ))}
         </div>

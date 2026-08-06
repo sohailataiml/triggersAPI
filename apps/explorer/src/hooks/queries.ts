@@ -103,6 +103,18 @@ export function useUpdateSubscription() {
   });
 }
 
+export function useDeleteSubscription() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteSubscription(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['subscriptions'] });
+      void qc.invalidateQueries({ queryKey: ['deliveries'] });
+    },
+  });
+}
+
 /** Invalidate every server-state query (used on SSE activity + reconnect). */
 export function useInvalidateAll() {
   const qc = useQueryClient();

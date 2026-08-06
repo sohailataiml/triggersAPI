@@ -65,6 +65,22 @@ export async function registerSubscriptionRoutes(
     },
   );
 
+  r.delete(
+    '/subscriptions/:id',
+    {
+      preHandler: requireRole(ApiKeyRole.ADMIN),
+      schema: {
+        tags: ['subscriptions'],
+        params: idParam,
+        response: { 200: dataEnvelope(z.object({ deleted: z.literal(true) })) },
+      },
+    },
+    async (request, reply) => {
+      await service.delete(request.principal!.workspaceId, request.params.id);
+      return reply.send({ data: { deleted: true as const } });
+    },
+  );
+
   r.patch(
     '/subscriptions/:id',
     {

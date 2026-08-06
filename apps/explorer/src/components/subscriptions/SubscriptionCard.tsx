@@ -1,4 +1,5 @@
-import { Filter, Inbox, Pencil, Power } from 'lucide-react';
+import { useState } from 'react';
+import { Filter, Inbox, Pencil, Power, Trash2 } from 'lucide-react';
 import { StatusBadge } from '../shared/StatusBadge';
 import { relativeTime } from '../../lib/format';
 import type { DeliveryListItem, Subscription } from '../../types';
@@ -18,15 +19,20 @@ export function SubscriptionCard({
   rollup,
   onEdit,
   onToggleActive,
+  onDelete,
   toggling,
+  deleting,
 }: {
   subscription: Subscription;
   rollup: SubscriptionRollup;
   onEdit: () => void;
   onToggleActive: () => void;
+  onDelete: () => void;
   toggling: boolean;
+  deleting: boolean;
 }) {
   const { filters, isActive, visibilityTimeoutSeconds, maxAttempts, name } = subscription;
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
     <div className="panel panel-pad flex flex-col gap-3">
@@ -91,26 +97,57 @@ export function SubscriptionCard({
         )}
       </div>
 
-      <div className="mt-auto flex gap-2 pt-1">
-        <button
-          type="button"
-          className="btn btn-ghost h-8 flex-1 px-2 py-0 text-xs"
-          onClick={onEdit}
-        >
-          <Pencil size={12} aria-hidden />
-          Edit
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost h-8 px-2 py-0 text-xs"
-          onClick={onToggleActive}
-          disabled={toggling}
-          title={isActive ? 'Pause (isActive=false)' : 'Resume (isActive=true)'}
-        >
-          <Power size={12} aria-hidden />
-          {isActive ? 'Pause' : 'Resume'}
-        </button>
-      </div>
+      {confirmingDelete ? (
+        <div className="mt-auto flex flex-wrap items-center gap-2 rounded-lg border border-dead/40 bg-dead/10 px-2 py-1.5 pt-1">
+          <span className="text-xs text-dead">Delete this subscription?</span>
+          <button
+            type="button"
+            className="btn btn-danger h-7 px-2 py-0 text-xs"
+            onClick={onDelete}
+            disabled={deleting}
+          >
+            {deleting ? 'Deleting…' : 'Confirm'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost h-7 px-2 py-0 text-xs"
+            onClick={() => setConfirmingDelete(false)}
+            disabled={deleting}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="mt-auto flex gap-2 pt-1">
+          <button
+            type="button"
+            className="btn btn-ghost h-8 flex-1 px-2 py-0 text-xs"
+            onClick={onEdit}
+          >
+            <Pencil size={12} aria-hidden />
+            Edit
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost h-8 px-2 py-0 text-xs"
+            onClick={onToggleActive}
+            disabled={toggling}
+            title={isActive ? 'Pause (isActive=false)' : 'Resume (isActive=true)'}
+          >
+            <Power size={12} aria-hidden />
+            {isActive ? 'Pause' : 'Resume'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost h-8 px-2 py-0 text-xs text-dead hover:border-dead/50"
+            onClick={() => setConfirmingDelete(true)}
+            title="Delete subscription"
+            aria-label="Delete subscription"
+          >
+            <Trash2 size={12} aria-hidden />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -127,6 +127,10 @@ export class ApiClient {
     return this.request('/v1/explorer/reset', this.settings.adminToken, { method: 'POST' });
   }
 
+  deleteSubscription(id: string): Promise<{ deleted: true }> {
+    return this.request(`/v1/subscriptions/${id}`, this.settings.adminToken, { method: 'DELETE' });
+  }
+
   replay(deliveryId: string, reason: string): Promise<unknown> {
     return this.request(`/v1/deliveries/${deliveryId}/replay`, this.settings.adminToken, {
       method: 'POST',

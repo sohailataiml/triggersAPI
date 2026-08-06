@@ -86,4 +86,13 @@ export class SubscriptionService {
     });
     return toResponse(sub);
   }
+
+  /**
+   * Delete a subscription (tenant-scoped). Its deliveries cascade-delete and any
+   * consumer keys scoped to it are set workspace-wide (schema onDelete rules).
+   */
+  async delete(workspaceId: string, id: string): Promise<void> {
+    const result = await this.prisma.subscription.deleteMany({ where: { id, workspaceId } });
+    if (result.count === 0) throw new NotFoundError('Subscription not found');
+  }
 }
