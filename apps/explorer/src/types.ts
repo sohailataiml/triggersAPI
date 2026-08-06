@@ -71,4 +71,21 @@ export interface Settings {
   apiBase: string;
   adminToken: string;
   producerToken: string;
+  consumerToken: string;
+}
+
+/** A delivery leased by the in-browser consumer console (holds the lease token). */
+export interface LeasedItem {
+  deliveryId: string;
+  eventId: string;
+  leaseToken: string;
+  leaseUntil: string;
+  attempt: number;
+  event: {
+    source: string;
+    eventType: string;
+    subject: string | null;
+    payload: Record<string, unknown>;
+    receivedAt: string;
+  };
 }

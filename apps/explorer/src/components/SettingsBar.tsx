@@ -51,6 +51,14 @@ export function SettingsBar({
           placeholder="PRODUCER token (trg_…)"
         />
       </div>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <input
+          style={{ flex: 1, minWidth: 320 }}
+          value={draft.consumerToken}
+          onChange={(e) => setDraft({ ...draft, consumerToken: e.target.value })}
+          placeholder="CONSUMER token (trg_…)"
+        />
+      </div>
       <div className="row">
         <button
           className="btn"

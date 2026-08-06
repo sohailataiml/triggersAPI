@@ -1,4 +1,11 @@
-import type { DeliveryDetail, DeliveryListItem, Overview, Settings, Subscription } from './types';
+import type {
+  DeliveryDetail,
+  DeliveryListItem,
+  LeasedItem,
+  Overview,
+  Settings,
+  Subscription,
+} from './types';
 
 /** Thin API client. Uses same-origin paths (Vite proxies /v1 to the API). */
 export class ApiClient {
@@ -71,6 +78,36 @@ export class ApiClient {
     return this.request(`/v1/deliveries/${deliveryId}/replay`, this.settings.adminToken, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    });
+  }
+
+  // --- Consumer-side operations (use the consumer token) ---
+
+  lease(
+    subscriptionId: string,
+    wait: number,
+    visibilityTimeout?: number,
+  ): Promise<{
+    items: LeasedItem[];
+    nextPollAfterMs: number;
+  }> {
+    const q = new URLSearchParams({ subscriptionId, limit: '10', wait: String(wait) });
+    if (visibilityTimeout) q.set('visibilityTimeout', String(visibilityTimeout));
+    return this.request(`/v1/inbox?${q.toString()}`, this.settings.consumerToken);
+  }
+
+  ack(deliveryId: string, leaseToken: string, processId: string): Promise<unknown> {
+    return this.request(`/v1/deliveries/${deliveryId}/ack`, this.settings.consumerToken, {
+      method: 'POST',
+      headers: { 'X-Consumer-Process-ID': processId },
+      body: JSON.stringify({ leaseToken }),
+    });
+  }
+
+  nack(deliveryId: string, leaseToken: string, reason: string): Promise<unknown> {
+    return this.request(`/v1/deliveries/${deliveryId}/nack`, this.settings.consumerToken, {
+      method: 'POST',
+      body: JSON.stringify({ leaseToken, reason }),
     });
   }
 }

@@ -8,17 +8,20 @@ import { ActivityStream } from './components/ActivityStream';
 import { IngestForm } from './components/IngestForm';
 import { Subscriptions } from './components/Subscriptions';
 import { Deliveries } from './components/Deliveries';
+import { ConsumerConsole } from './components/ConsumerConsole';
 
 const STORAGE_KEY = 'triggers-explorer-settings';
 
 function loadSettings(): Settings {
+  const defaults: Settings = { apiBase: '', adminToken: '', producerToken: '', consumerToken: '' };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Settings;
+    // Merge over defaults so settings saved before a field existed stay valid.
+    if (raw) return { ...defaults, ...(JSON.parse(raw) as Partial<Settings>) };
   } catch {
     // ignore
   }
-  return { apiBase: '', adminToken: '', producerToken: '' };
+  return defaults;
 }
 
 export function App() {
@@ -105,6 +108,12 @@ export function App() {
           <div className="grid">
             <div>
               <IngestForm api={api} onIngested={refresh} />
+              <ConsumerConsole
+                api={api}
+                subscriptions={subscriptions}
+                hasToken={Boolean(settings.consumerToken)}
+                onChange={refresh}
+              />
               <Subscriptions api={api} subscriptions={subscriptions} onChange={refresh} />
               <Deliveries
                 api={api}
