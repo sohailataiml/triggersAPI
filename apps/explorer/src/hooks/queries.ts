@@ -1,7 +1,15 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { useApi, useSettings } from '../app/apiContext';
 import type { DeliveryListItem, EventListItem, Overview, Subscription } from '../types';
+
+/** Payload for creating/editing a subscription (Pull inbox is the only mode). */
+export interface SubscriptionInput {
+  name: string;
+  filters: { source?: string | null; eventType?: string | null; subject?: string | null };
+  visibilityTimeoutSeconds?: number;
+  maxAttempts?: number;
+}
 
 /** Query keys — single place so invalidation stays consistent. */
 export const qk = {
@@ -65,6 +73,33 @@ export function useEvents(filters: EventFilters, enabled = true) {
     queryFn: () => api.events(filters),
     enabled: enabled && Boolean(adminToken),
     refetchOnWindowFocus: false,
+  });
+}
+
+export function useCreateSubscription() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SubscriptionInput) => api.createSubscription(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['subscriptions'] }),
+  });
+}
+
+export function useUpdateSubscription() {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Partial<SubscriptionInput> & { isActive?: boolean };
+    }) => api.updateSubscription(id, patch),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['subscriptions'] });
+      void qc.invalidateQueries({ queryKey: ['deliveries'] });
+    },
   });
 }
 

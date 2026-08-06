@@ -178,3 +178,56 @@ console (Stripe/Linear-restrained dark theme) that tells the reliability story a
 
 Pipeline "demo mode" + attempt timelines, subscription create/manage drawer, Recharts (needs a
 metrics history store), optional MCP chat.
+
+---
+
+## Explorer expansion — Demo mode, subscriptions, attempts, guided scenarios ✅
+
+Second Explorer pass, prioritizing demo value. All working behavior + the 14 prior tests preserved.
+
+### 1. Pipeline Demo Mode
+
+- Full-screen presentation overlay (`components/pipeline/DemoMode.tsx`) with an enlarged pipeline
+  (`LivePipeline` gained `size`/`showHeader` props), a recent-event selector, and a focus panel
+  (`EventFocusCard`) showing source, event type, short id, status, **live lease + retry
+  countdowns**, delivery target (Pull inbox → subscription), attempt count, and the attempt
+  timeline. Esc to exit; secondary chrome hidden; reduced-motion respected. Real REST+SSE only.
+
+### 2. Subscription management
+
+- `SubscriptionFormDrawer` (create/edit: name, source/eventType filters, delivery mode = Pull
+  inbox, visibility timeout, max attempts) + `SubscriptionCard` (active toggle, filters, mode,
+  pending count, latest delivery — rollups derived client-side) + `SubscriptionsPanel`, homed on
+  the Events page. Broadened `api.createSubscription`/`updateSubscription` + TanStack mutations.
+  Tenant isolation + Zod validation unchanged; no secrets exposed.
+
+### 3. Delivery attempt timeline
+
+- `DeliveryAttemptTimeline` reconstructs each lease/ACK/NACK/retry/dead-letter/replay from the SSE
+  feed (attempt #, timestamps, duration, failure reason) and appends a live tail (current lease
+  or next-retry countdown) from the delivery snapshot. Surfaced as an **Attempts** tab in the
+  detail drawer and inside the demo focus panel. Invents nothing beyond backend data.
+
+### 4. Guided demo scenarios
+
+- `DemoRunner` + `scenarios.ts`: A) successful delivery, B) consumer crash & redelivery (3s
+  visibility timeout → expiry → re-lease → ACK), C) dead-letter & replay. Every step drives the
+  real backend and narrates from actual responses — no hard-coded final states. Scenario C
+  restores the subscription's `maxAttempts` in a `finally` (cleanup).
+
+### 5. Security
+
+- Settings tokens are masked (password inputs + per-field reveal toggle + `saved · …abcd` tail);
+  added a visible "demo credentials — keep out of source control" warning. No credential logging.
+- Verified: no `trg_` tokens in tracked files or branch git history; no hardcoded secrets in
+  `apps/explorer/src`.
+
+### Verified
+
+- `pnpm --filter @triggers/explorer typecheck` ✅ · Explorer tests (24 total: 14 prior + 10 new
+  covering scenario transitions, subscription create/filter, attempt timeline, demo focus) ·
+  `build` ✅ · manual 3-scenario run in-browser · zero console errors.
+
+### Still deferred
+
+Recharts (no metrics-history store), webhook push delivery mode, MCP chatbot.

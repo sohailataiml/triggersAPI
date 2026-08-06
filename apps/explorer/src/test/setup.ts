@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
+
+// The default 1000ms async timeout is tight when the suite runs alongside a
+// build/dev server on a loaded machine; give findBy*/waitFor more headroom.
+configure({ asyncUtilTimeout: 5000 });
 
 afterEach(() => cleanup());
 

@@ -20,9 +20,13 @@ const BRANCH_RING: Record<'retry' | 'replay', string> = {
 export function LivePipeline({
   selectedId,
   onSelect,
+  size = 'normal',
+  showHeader = true,
 }: {
   selectedId: string | null;
   onSelect: (eventId: string) => void;
+  size?: 'normal' | 'demo';
+  showHeader?: boolean;
 }) {
   const events = useRecentEvents();
   const reduce = useReducedMotion();
@@ -30,17 +34,27 @@ export function LivePipeline({
   const dead = events.filter((e) => e.branch === 'dead');
   const live = events.filter((e) => e.branch !== 'dead');
 
+  const demo = size === 'demo';
+  const minWidth = demo ? 'min-w-[900px]' : 'min-w-[720px]';
+  const laneMin = demo ? 'min-h-[72px]' : 'min-h-[52px]';
+  const labelSize = demo ? 'text-sm' : 'text-[0.7rem]';
+  const wrapper = demo ? '' : 'panel panel-pad';
+
   return (
-    <div className="panel panel-pad">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-text">Live event pipeline</h2>
-          <p className="text-xs text-muted">Recent events moving through delivery, in real time</p>
+    <div className={wrapper}>
+      {showHeader && (
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-text">Live event pipeline</h2>
+            <p className="text-xs text-muted">
+              Recent events moving through delivery, in real time
+            </p>
+          </div>
+          <span className="rounded-md border border-border bg-surface-2/70 px-2 py-0.5 text-xs tabular-nums text-muted">
+            {events.length} tracked
+          </span>
         </div>
-        <span className="rounded-md border border-border bg-surface-2/70 px-2 py-0.5 text-xs tabular-nums text-muted">
-          {events.length} tracked
-        </span>
-      </div>
+      )}
 
       {events.length === 0 ? (
         <EmptyState
@@ -50,7 +64,7 @@ export function LivePipeline({
       ) : (
         <LayoutGroup>
           <div className="overflow-x-auto pb-2">
-            <div className="flex min-w-[720px] items-stretch gap-1">
+            <div className={`flex ${minWidth} items-stretch gap-1`}>
               {PIPELINE_STAGES.map((stage, idx) => {
                 const here = live.filter((e) => e.currentIndex === idx);
                 const reachedCount = live.filter((e) => e.reachedIndex >= idx).length;
@@ -66,7 +80,9 @@ export function LivePipeline({
                         }`}
                       />
                       <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${active ? c.dot : 'bg-border'}`}
+                        className={`${demo ? 'h-3 w-3' : 'h-2 w-2'} shrink-0 rounded-full ${
+                          active ? c.dot : 'bg-border'
+                        }`}
                       />
                       <div
                         className={`h-1.5 flex-1 rounded-full ${
@@ -79,20 +95,21 @@ export function LivePipeline({
                       />
                     </div>
                     <div className="mt-1.5 text-center">
-                      <div
-                        className={`text-[0.7rem] font-medium ${active ? c.text : 'text-faint'}`}
-                      >
+                      <div className={`${labelSize} font-medium ${active ? c.text : 'text-faint'}`}>
                         {stage.label}
                       </div>
                     </div>
                     {/* token lane for this stage */}
-                    <div className="mt-2 flex min-h-[52px] flex-wrap content-start justify-center gap-1.5">
+                    <div
+                      className={`mt-2 flex ${laneMin} flex-wrap content-start justify-center gap-1.5`}
+                    >
                       {here.map((e) => (
                         <Token
                           key={e.eventId}
                           token={e}
                           selected={e.eventId === selectedId}
                           reduce={!!reduce}
+                          demo={demo}
                           onSelect={onSelect}
                         />
                       ))}
@@ -115,6 +132,7 @@ export function LivePipeline({
                     token={e}
                     selected={e.eventId === selectedId}
                     reduce={!!reduce}
+                    demo={demo}
                     onSelect={onSelect}
                   />
                 ))}
@@ -131,11 +149,13 @@ function Token({
   token,
   selected,
   reduce,
+  demo,
   onSelect,
 }: {
   token: EventToken;
   selected: boolean;
   reduce: boolean;
+  demo: boolean;
   onSelect: (id: string) => void;
 }) {
   const src = sourceMeta(token.source);
@@ -145,6 +165,7 @@ function Token({
       : selected
         ? 'ring-accent'
         : 'ring-border-strong';
+  const dims = demo ? 'h-10 w-10 text-lg' : 'h-7 w-7 text-sm';
 
   return (
     <motion.button
@@ -155,7 +176,7 @@ function Token({
       onClick={() => onSelect(token.eventId)}
       title={`${src.label} · ${token.eventType} · ${shortId(token.eventId)}`}
       aria-label={`${src.label} ${token.eventType} event ${shortId(token.eventId)}`}
-      className={`grid h-7 w-7 place-items-center rounded-full bg-surface-2 text-sm ring-2 ${ring} transition hover:scale-110 focus-visible:outline-none focus-visible:ring-accent ${
+      className={`grid ${dims} place-items-center rounded-full bg-surface-2 ring-2 ${ring} transition hover:scale-110 focus-visible:outline-none focus-visible:ring-accent ${
         selected ? 'scale-110' : ''
       }`}
     >

@@ -39,7 +39,9 @@ export class ApiClient {
 
   createSubscription(input: {
     name: string;
-    filters: { source?: string; eventType?: string; subject?: string };
+    filters: { source?: string | null; eventType?: string | null; subject?: string | null };
+    visibilityTimeoutSeconds?: number;
+    maxAttempts?: number;
   }): Promise<Subscription> {
     return this.request('/v1/subscriptions', this.settings.adminToken, {
       method: 'POST',
@@ -93,7 +95,16 @@ export class ApiClient {
     return this.request(`/v1/events${qs ? `?${qs}` : ''}`, this.settings.adminToken);
   }
 
-  updateSubscription(id: string, patch: { maxAttempts?: number }): Promise<Subscription> {
+  updateSubscription(
+    id: string,
+    patch: {
+      name?: string;
+      filters?: { source?: string | null; eventType?: string | null; subject?: string | null };
+      visibilityTimeoutSeconds?: number;
+      maxAttempts?: number;
+      isActive?: boolean;
+    },
+  ): Promise<Subscription> {
     return this.request(`/v1/subscriptions/${id}`, this.settings.adminToken, {
       method: 'PATCH',
       body: JSON.stringify(patch),

@@ -27,12 +27,26 @@ tokens. Leave **API base** blank — Vite proxies `/v1` and `/metrics` to the AP
 
 ## Sections
 
-| Section       | What it shows                                                                                                                |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Dashboard** | KPI cards, the live event pipeline, event composer, consumer simulator, dead-letter recovery, and a humanized activity feed. |
-| **Pipeline**  | The enlarged real-time pipeline + status legend.                                                                             |
-| **Events**    | Event-centric list (`GET /v1/events`) with per-status delivery rollups and filters.                                          |
-| **System**    | Real service health from `/health/ready` (API, Postgres, Redis, SSE) + live counts.                                          |
+| Section       | What it shows                                                                                                                           |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dashboard** | Guided demo runner, KPI cards, the live event pipeline, event composer, consumer simulator, dead-letter recovery, and a humanized feed. |
+| **Pipeline**  | Real-time pipeline, a focused-event panel, and a full-screen **Demo mode** for presentations.                                           |
+| **Events**    | Subscription management (cards + create/edit drawer) and an event-centric list (`GET /v1/events`) with per-status rollups and filters.  |
+| **System**    | Real service health from `/health/ready` (API, Postgres, Redis, SSE) + live counts.                                                     |
+
+### Presentation & operations features
+
+- **Guided demo** (Dashboard) — one click runs a real backend sequence for _Successful delivery_,
+  _Consumer crash & redelivery_, or _Dead-letter & replay_, narrating each step from actual API
+  responses. Scenario C restores the subscription's retry budget on finish.
+- **Demo mode** (Pipeline) — full-screen presentation view with an enlarged pipeline and a focus
+  panel: source, event type, short id, status, live lease + retry countdowns, delivery target
+  (Pull inbox → subscription), attempt count, and the attempt timeline. Press **Esc** to exit.
+- **Subscriptions** (Events) — cards with active toggle, filters, delivery mode, pending count,
+  and latest delivery; a create/edit drawer for name, filters, visibility timeout, and max
+  attempts. Pull inbox is the only delivery mode the backend implements today.
+- **Attempt timeline** (detail drawer → _Attempts_) — reconstructs each lease/ACK/NACK/retry/
+  dead-letter/replay from the live SSE feed, with a live lease/next-retry tail from the snapshot.
 
 ## Architecture
 
@@ -66,12 +80,21 @@ pnpm --filter @triggers/explorer typecheck
 pnpm --filter @triggers/explorer build
 ```
 
-Covered: JSON-validation + ingest in the composer, KPI rendering + derived success rate, SSE
-dedup and pipeline stage projection, and the formatting helpers.
+Covered: composer JSON-validation + ingest, KPI rendering + derived success rate, SSE dedup and
+pipeline stage projection, formatting helpers, **guided-scenario state transitions** (incl.
+maxAttempts cleanup), **subscription creation + filter handling**, the **attempt timeline**
+reconstruction, and the **demo focus panel**.
+
+## Security notes
+
+- Tokens live only in this browser's `localStorage`. The Settings drawer masks them (password
+  inputs + per-field reveal), shows only a `…abcd` tail for saved keys, and warns against
+  committing demo credentials. No credentials are logged.
+- The repo is verified free of real tokens in tracked files and git history.
 
 ## Known limitations
 
 - **No historical time-series** — the platform keeps point-in-time counts only, so there are no
   trend arrows or charts. Prometheus scrapes `/metrics` for history.
-- **Dashboard-first pass** — subscription create/manage drawer, pipeline "demo mode" + attempt
-  timelines, and the optional MCP chat are deferred to the expand pass.
+- **Pull inbox only** — webhook push delivery mode and the optional MCP chatbot are not
+  implemented; the UI reflects that truthfully rather than faking a push target.

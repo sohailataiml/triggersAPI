@@ -7,6 +7,7 @@ import { ActivityStream } from '../components/dashboard/ActivityStream';
 import { ConsumerSimulator } from '../components/dashboard/ConsumerSimulator';
 import { DeadLetterPanel } from '../components/dashboard/DeadLetterPanel';
 import { EventDetailDrawer } from '../components/events/EventDetailDrawer';
+import { DemoRunner } from '../components/demo/DemoRunner';
 
 export function Dashboard() {
   const invalidate = useInvalidateAll();
@@ -14,6 +15,8 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4">
+      <DemoRunner onChange={invalidate} />
+
       <KpiRow />
 
       <LivePipeline selectedId={selectedEventId} onSelect={setSelectedEventId} />

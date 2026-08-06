@@ -5,6 +5,7 @@ import { sourceMeta } from '../lib/samples';
 import { clockTime, relativeTime, shortId } from '../lib/format';
 import { EmptyState, ErrorState, LoadingSkeleton } from '../components/shared/States';
 import { EventDetailDrawer } from '../components/events/EventDetailDrawer';
+import { SubscriptionsPanel } from '../components/subscriptions/SubscriptionsPanel';
 import type { EventListItem } from '../types';
 
 const STATUS_OPTIONS = ['', 'PENDING', 'LEASED', 'RETRY_SCHEDULED', 'ACKNOWLEDGED', 'DEAD_LETTER'];
@@ -40,6 +41,8 @@ export function Events() {
 
   return (
     <div className="space-y-4">
+      <SubscriptionsPanel />
+
       <div className="panel panel-pad">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '../../app/apiContext';
+import { useDeliveries } from '../../hooks/queries';
 import { useEventStore } from '../../store/eventStore';
 import { ACTIVITY_META, colorClasses } from '../../lib/status';
 import { sourceMeta } from '../../lib/samples';
@@ -10,11 +11,13 @@ import { CopyButton } from '../shared/CopyButton';
 import { JsonViewer } from '../shared/JsonViewer';
 import { StatusBadge } from '../shared/StatusBadge';
 import { LoadingSkeleton } from '../shared/States';
+import { DeliveryAttemptTimeline } from './DeliveryAttemptTimeline';
 import type { DeliveryListItem } from '../../types';
 
-type Tab = 'journey' | 'deliveries';
+type Tab = 'journey' | 'attempts' | 'deliveries';
+const TABS: Tab[] = ['journey', 'attempts', 'deliveries'];
 
-/** Event-centric detail: a lifecycle journey plus the event's deliveries. */
+/** Event-centric detail: lifecycle journey, per-delivery attempts, and deliveries. */
 export function EventDetailDrawer({
   eventId,
   onClose,
@@ -36,17 +39,25 @@ export function EventDetailDrawer({
     [activities, eventId],
   );
 
+  // Deliveries for this event (shares the ['deliveries', {}] cache → SSE refresh).
+  const { data: allDeliveries = [] } = useDeliveries({});
+  const deliveries = useMemo(
+    () => allDeliveries.filter((d) => d.eventId === eventId),
+    [allDeliveries, eventId],
+  );
+
   const head = journey[0];
-  const source = (head?.summary?.source as string) ?? 'demo';
+  const source = (head?.summary?.source as string) ?? deliveries[0]?.event.source ?? 'demo';
   const eventType =
     (head?.summary?.eventType as string) ??
+    deliveries[0]?.event.eventType ??
     (journey.find((j) => j.summary?.eventType)?.summary?.eventType as string | undefined);
 
   return (
     <Drawer
       open={Boolean(eventId)}
       onClose={onClose}
-      width={500}
+      width={520}
       title={
         <span className="flex items-center gap-2">
           <span aria-hidden>{sourceMeta(source).glyph}</span>
@@ -65,7 +76,7 @@ export function EventDetailDrawer({
       {eventId && (
         <>
           <div className="mb-4 flex gap-1 rounded-lg border border-border bg-surface-2/50 p-1">
-            {(['journey', 'deliveries'] as Tab[]).map((t) => (
+            {TABS.map((t) => (
               <button
                 key={t}
                 type="button"
@@ -79,11 +90,9 @@ export function EventDetailDrawer({
             ))}
           </div>
 
-          {tab === 'journey' ? (
-            <JourneyTimeline eventId={eventId} journey={journey} />
-          ) : (
-            <DeliveriesTab eventId={eventId} api={api} />
-          )}
+          {tab === 'journey' && <JourneyTimeline eventId={eventId} journey={journey} />}
+          {tab === 'attempts' && <AttemptsTab eventId={eventId} deliveries={deliveries} />}
+          {tab === 'deliveries' && <DeliveriesTab deliveries={deliveries} api={api} />}
         </>
       )}
     </Drawer>
@@ -144,15 +153,33 @@ function JourneyTimeline({
   );
 }
 
-function DeliveriesTab({ eventId, api }: { eventId: string; api: ReturnType<typeof useApi> }) {
-  const { data, isLoading } = useQuery<DeliveryListItem[]>({
-    queryKey: ['event-deliveries', eventId],
-    queryFn: () => api.deliveries({}),
-    refetchOnWindowFocus: false,
-  });
-  const [openId, setOpenId] = useState<string | null>(null);
-  const rows = (data ?? []).filter((d) => d.eventId === eventId);
+function AttemptsTab({ eventId, deliveries }: { eventId: string; deliveries: DeliveryListItem[] }) {
+  if (deliveries.length === 0)
+    return <p className="text-sm text-muted">No deliveries recorded for this event.</p>;
+  return (
+    <div className="space-y-4">
+      {deliveries.map((d) => (
+        <div key={d.id} className="rounded-lg border border-border bg-surface-2/30 p-3">
+          <div className="mb-3 flex items-center gap-2">
+            <StatusBadge status={d.status} size="sm" />
+            <span className="mono text-faint">dlv {shortId(d.id)}</span>
+            <span className="ml-auto text-xs text-muted">{d.attemptCount} attempts</span>
+          </div>
+          <DeliveryAttemptTimeline deliveryId={d.id} eventId={eventId} snapshot={d} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
+function DeliveriesTab({
+  deliveries,
+  api,
+}: {
+  deliveries: DeliveryListItem[];
+  api: ReturnType<typeof useApi>;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
   const detail = useQuery({
     queryKey: ['delivery-detail', openId],
     queryFn: () => api.delivery(openId as string),
@@ -160,13 +187,12 @@ function DeliveriesTab({ eventId, api }: { eventId: string; api: ReturnType<type
     refetchOnWindowFocus: false,
   });
 
-  if (isLoading) return <LoadingSkeleton rows={2} />;
-  if (rows.length === 0)
+  if (deliveries.length === 0)
     return <p className="text-sm text-muted">No deliveries recorded for this event.</p>;
 
   return (
     <div className="space-y-2">
-      {rows.map((d) => (
+      {deliveries.map((d) => (
         <div key={d.id} className="rounded-lg border border-border bg-surface-2/40 p-3">
           <div className="flex items-center gap-2">
             <StatusBadge status={d.status} size="sm" />
