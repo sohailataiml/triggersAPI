@@ -112,7 +112,9 @@ services:
     runtime: static
     repo: https://github.com/sohailataiml/triggersAPI
     branch: explorer-redesign
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @triggers/explorer build
+    # Render's static-site builder already provides pnpm (do NOT run
+    # `corepack enable` here — it fails with EROFS on the read-only image).
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @triggers/explorer build
     staticPublishPath: apps/explorer/dist
     routes:
       - type: rewrite
