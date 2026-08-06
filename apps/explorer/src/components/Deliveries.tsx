@@ -28,6 +28,9 @@ export function Deliveries({
 }) {
   const [detail, setDetail] = useState<DeliveryDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Delivery id currently awaiting inline confirmation before replay.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [replayingId, setReplayingId] = useState<string | null>(null);
 
   async function openDetail(id: string) {
     setErr(null);
@@ -38,14 +41,17 @@ export function Deliveries({
     }
   }
 
-  async function retry(id: string) {
-    if (!confirm('Replay this dead-letter delivery back to PENDING?')) return;
+  async function replay(id: string) {
     setErr(null);
+    setReplayingId(id);
     try {
       await api.replay(id, 'Replayed from Explorer');
+      setConfirmingId(null);
       onChange();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Failed to replay');
+    } finally {
+      setReplayingId(null);
     }
   }
 
@@ -112,9 +118,25 @@ export function Deliveries({
                 <td className="dim">{time(d.createdAt)}</td>
                 <td>
                   {d.status === 'DEAD_LETTER' ? (
-                    <button className="btn danger" onClick={() => retry(d.id)}>
-                      Retry Now
-                    </button>
+                    confirmingId === d.id ? (
+                      <div className="row" style={{ flexWrap: 'nowrap' }}>
+                        <span className="dim">Replay?</span>
+                        <button
+                          className="btn danger"
+                          disabled={replayingId === d.id}
+                          onClick={() => replay(d.id)}
+                        >
+                          {replayingId === d.id ? '…' : 'Confirm'}
+                        </button>
+                        <button className="btn ghost" onClick={() => setConfirmingId(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button className="btn danger" onClick={() => setConfirmingId(d.id)}>
+                        Retry Now
+                      </button>
+                    )
                   ) : (
                     <button className="btn ghost" onClick={() => openDetail(d.id)}>
                       Detail
