@@ -37,11 +37,25 @@ export async function registerExplorerRoutes(
     async (request, reply) => {
       reply.hijack();
       const res = reply.raw;
+
+      // The @fastify/cors plugin sets CORS headers during the normal send
+      // lifecycle, which hijacking bypasses — so the cross-origin browser
+      // EventSource (deployed Explorer -> API on another host) would be blocked.
+      // Echo the request origin back when it is in the allow-list.
+      const origin = request.headers.origin;
+      const corsHeaders: Record<string, string> = {};
+      if (typeof origin === 'string' && app.appConfig.CORS_ORIGINS.includes(origin)) {
+        corsHeaders['Access-Control-Allow-Origin'] = origin;
+        corsHeaders['Access-Control-Allow-Credentials'] = 'true';
+        corsHeaders['Vary'] = 'Origin';
+      }
+
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
+        ...corsHeaders,
       });
       res.write(': connected\n\n');
 
