@@ -16,7 +16,10 @@ export class ApiClient {
     const res = await fetch(`${this.settings.apiBase}${path}`, {
       ...init,
       headers: {
-        'Content-Type': 'application/json',
+        // Only advertise a JSON body when we actually send one. Fastify rejects
+        // an empty body when Content-Type is application/json, which broke
+        // body-less calls like reset (POST) and delete (DELETE).
+        ...(init.body != null ? { 'Content-Type': 'application/json' } : {}),
         Authorization: `Bearer ${token}`,
         ...(init.headers ?? {}),
       },
