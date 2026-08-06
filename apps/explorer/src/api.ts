@@ -67,10 +67,17 @@ export class ApiClient {
     eventType: string;
     subject?: string;
     payload: Record<string, unknown>;
-  }): Promise<unknown> {
+  }): Promise<{ eventId: string; duplicate: boolean; matchedSubscriptions: number }> {
     return this.request('/v1/events', this.settings.producerToken, {
       method: 'POST',
       body: JSON.stringify(input),
+    });
+  }
+
+  updateSubscription(id: string, patch: { maxAttempts?: number }): Promise<Subscription> {
+    return this.request(`/v1/subscriptions/${id}`, this.settings.adminToken, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
     });
   }
 

@@ -26,7 +26,9 @@ export function ConsumerConsole({
   const [note, setNote] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const [demoBusy, setDemoBusy] = useState(false);
   const sub = subscriptionId || subscriptions[0]?.id || '';
+  const selectedSub = subscriptions.find((s) => s.id === sub);
 
   async function lease() {
     if (!sub) return;
@@ -73,6 +75,48 @@ export function ConsumerConsole({
     }
   }
 
+  /**
+   * One-click dead-letter: set the selected subscription's maxAttempts to 1,
+   * ingest a matching event, lease it, and NACK it — so a single failure lands
+   * it in DEAD_LETTER, ready for Retry Now in the Deliveries table.
+   */
+  async function deadLetterDemo() {
+    if (!selectedSub) return;
+    setErr(null);
+    setNote(null);
+    setDemoBusy(true);
+    try {
+      // 1. Make a single failure exhaust attempts.
+      await api.updateSubscription(selectedSub.id, { maxAttempts: 1 });
+
+      // 2. Ingest an event that matches this subscription's filters.
+      const { eventId } = await api.ingest({
+        source: selectedSub.filters.source ?? 'demo',
+        eventType: selectedSub.filters.eventType ?? 'demo.failed',
+        subject: selectedSub.filters.subject ?? undefined,
+        payload: { deadLetterDemo: true },
+      });
+
+      // 3. Lease it and 4. NACK it → DEAD_LETTER (attempt 1 of max 1).
+      const { items: leased } = await api.lease(selectedSub.id, 0);
+      const target = leased.find((i) => i.eventId === eventId) ?? leased[0];
+      if (!target) {
+        setNote('Ingested, but nothing was leasable — try Lease then NACK manually.');
+        return;
+      }
+      await api.nack(target.deliveryId, target.leaseToken, 'dead_letter_demo');
+      setItems((prev) => prev.filter((i) => i.deliveryId !== target.deliveryId));
+      setNote(
+        `Dead-lettered delivery ${target.deliveryId.slice(0, 8)} — click "Retry Now" on it in Deliveries (maxAttempts is now 1 for "${selectedSub.name}").`,
+      );
+      onChange();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Dead-letter demo failed');
+    } finally {
+      setDemoBusy(false);
+    }
+  }
+
   return (
     <div className="panel">
       <h2>Consumer console</h2>
@@ -99,6 +143,14 @@ export function ConsumerConsole({
         </label>
         <button className="btn" onClick={lease} disabled={busy || !hasToken || !sub}>
           {busy ? 'Leasing…' : 'Lease'}
+        </button>
+        <button
+          className="btn ghost"
+          onClick={deadLetterDemo}
+          disabled={demoBusy || !hasToken || !selectedSub}
+          title="Set maxAttempts=1, ingest, lease, and NACK to force a dead-letter"
+        >
+          {demoBusy ? 'Running…' : 'Dead-letter demo'}
         </button>
       </div>
       {note && (

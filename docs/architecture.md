@@ -5,12 +5,12 @@ the [reliability model](../README.md#reliability-model).
 
 ## Components
 
-| Component                         | Responsibility                                                                                                            |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **Fastify API** (`apps/api`)      | Auth, validation (Zod), ingestion, leasing, ACK/NACK/replay, long polling, SSE, metrics. Stateless — scales horizontally. |
-| **PostgreSQL**                    | Source of truth: workspaces, API keys, events, subscriptions, deliveries, leases, ACK receipts, replay audits.            |
-| **Redis**                         | Advisory only: Pub/Sub wake-ups, Explorer activity (Redis Streams), BullMQ scheduling, long-poll counters.                |
-| **BullMQ worker** (`apps/worker`) | Repeatable job (every 5s) recovering expired leases → retry/dead-letter.                                                  |
+| Component                         | Responsibility                                                                                                                             |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Fastify API** (`apps/api`)      | Auth, validation (Zod), ingestion, leasing, ACK/NACK/replay, long polling, SSE, metrics. Stateless — scales horizontally.                  |
+| **PostgreSQL**                    | Source of truth: workspaces, API keys, events, subscriptions, deliveries, leases, ACK receipts, replay audits.                             |
+| **Redis**                         | Advisory only: Pub/Sub wake-ups, Explorer activity (Redis Streams), BullMQ scheduling, long-poll counters.                                 |
+| **BullMQ worker** (`apps/worker`) | Repeatable job (every 5s) recovering expired leases → retry/dead-letter.                                                                   |
 | **Explorer** (`apps/explorer`)    | React/Vite UI: overview, live SSE stream, ingest, subscriptions, deliveries, Retry Now, and a consumer console (lease/ACK/NACK) for demos. |
 
 ## Domain model
