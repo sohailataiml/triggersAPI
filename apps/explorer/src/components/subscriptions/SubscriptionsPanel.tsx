@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import {
   useDeleteSubscription,
   useDeliveries,
@@ -33,12 +33,24 @@ export function SubscriptionsPanel() {
   const [editing, setEditing] = useState<Subscription | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   const rollups = useMemo(() => {
     const map = new Map<string, SubscriptionRollup>();
     for (const s of subscriptions) map.set(s.id, rollupFor(deliveries, s.id));
     return map;
   }, [subscriptions, deliveries]);
+
+  // Client-side filter of the cards by name / source / event-type.
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return subscriptions;
+    return subscriptions.filter((s) =>
+      [s.name, s.filters.source ?? '', s.filters.eventType ?? ''].some((v) =>
+        v.toLowerCase().includes(q),
+      ),
+    );
+  }, [subscriptions, query]);
 
   function openCreate() {
     setEditing(null);
@@ -72,14 +84,32 @@ export function SubscriptionsPanel() {
           <h2 className="text-sm font-semibold text-text">Subscriptions</h2>
           <p className="text-xs text-muted">Which events fan out to a pull inbox</p>
         </div>
-        <button
-          type="button"
-          className="btn btn-primary h-8 px-3 py-0 text-xs"
-          onClick={openCreate}
-        >
-          <Plus size={13} aria-hidden />
-          New subscription
-        </button>
+        <div className="flex items-center gap-2">
+          {subscriptions.length > 0 && (
+            <div className="relative">
+              <Search
+                size={13}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint"
+                aria-hidden
+              />
+              <input
+                className="input h-8 w-40 py-0 pl-7 text-xs"
+                placeholder="Search subscriptions…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Search subscriptions"
+              />
+            </div>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary h-8 px-3 py-0 text-xs"
+            onClick={openCreate}
+          >
+            <Plus size={13} aria-hidden />
+            New subscription
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -99,9 +129,11 @@ export function SubscriptionsPanel() {
             New subscription
           </button>
         </EmptyState>
+      ) : visible.length === 0 ? (
+        <EmptyState title="No matches" hint={`No subscriptions match “${query}”.`} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {subscriptions.map((s) => (
+          {visible.map((s) => (
             <SubscriptionCard
               key={s.id}
               subscription={s}

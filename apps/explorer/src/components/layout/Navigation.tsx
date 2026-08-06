@@ -5,7 +5,7 @@ export type Section = 'dashboard' | 'pipeline' | 'events' | 'system';
 const ITEMS: Array<{ id: Section; label: string; icon: typeof Activity }> = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'pipeline', label: 'Pipeline', icon: Activity },
-  { id: 'events', label: 'Events', icon: ListTree },
+  { id: 'events', label: 'Subscriptions', icon: ListTree },
   { id: 'system', label: 'System', icon: ServerCog },
 ];
 

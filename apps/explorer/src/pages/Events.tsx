@@ -43,6 +43,10 @@ export function Events() {
     <div className="space-y-4">
       <SubscriptionsPanel />
 
+      <div>
+        <h2 className="mb-2 text-sm font-semibold text-text">Events</h2>
+      </div>
+
       <div className="panel panel-pad">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
@@ -53,7 +57,7 @@ export function Events() {
             />
             <input
               className="input pl-8"
-              placeholder="Search source, type, or subject…"
+              placeholder="Search events by source, type, or subject…"
               value={filters.search ?? ''}
               onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || undefined }))}
             />
