@@ -18,6 +18,8 @@ Built with Node.js + TypeScript, Fastify, Prisma/PostgreSQL, Redis, BullMQ, and 
 - [Run with Docker Compose](#run-with-docker-compose)
 - [Demo script](#demo-script)
 - [API reference](#api-reference)
+- [MCP server (for AI agents)](#mcp-server-for-ai-agents)
+- [Zapier AI Automation Copilot](#zapier-ai-automation-copilot)
 - [Reliability model](#reliability-model)
 - [Tradeoffs & non-goals](#tradeoffs--non-goals)
 - [Observability](#observability)
@@ -155,6 +157,85 @@ Success responses use `{ "data": ... }`; errors use `{ "error": { code, message,
 
 See [`docs/api-examples.md`](docs/api-examples.md) for `curl` and a TypeScript consumer loop.
 
+## MCP server (for AI agents)
+
+`apps/mcp` exposes the platform over the
+[Model Context Protocol](https://modelcontextprotocol.io), so an agent can be a
+first-class producer or consumer: publish events, lease work from a
+subscription, ACK or NACK it, and triage the dead-letter queue.
+
+It is a thin client of `/v1` rather than a second database consumer, so API-key
+auth, role checks, idempotency, and metrics all still apply. Tool schemas are
+the Zod schemas from `@triggers/contracts` — the same ones the API validates
+with — so the tool surface cannot drift from the API without a test failing.
+
+**14 tools**, registered per role: `ingest_event` (producer);
+`lease_deliveries` / `ack_delivery` / `nack_delivery` (consumer);
+`replay_delivery`, `get_delivery`, and subscription CRUD (admin); plus the read
+tools `list_events`, `list_deliveries`, `list_subscriptions`, `get_overview`.
+A producer-only key never sees admin tools. Three read-only resources
+(`triggers://overview`, `triggers://subscriptions`,
+`triggers://deliveries/dead-letter`) let a model orient without a tool call.
+
+Run it against the local stack — set the seeded tokens in `.env` first:
+
+```bash
+pnpm mcp:stdio     # stdio transport, for a local MCP client
+pnpm dev:mcp       # Streamable HTTP transport on :3100
+```
+
+Register it with Claude Code:
+
+```bash
+claude mcp add triggers -- pnpm --filter @triggers/mcp start:stdio
+```
+
+Full tool reference, auth modes, and client configuration:
+[`docs/mcp.md`](docs/mcp.md).
+
+## Zapier AI Automation Copilot
+
+`apps/copilot` is an AI client that operates the platform in natural language.
+It consumes the MCP server above — it is not a second control plane. Type
+"send a GitHub PR event", "check the inbox", "acknowledge it", and each becomes
+a real MCP tool call while the Explorer shows the same delivery move
+`Pending → Leased → Acknowledged` live.
+
+```
+User → Copilot UI → agent runtime (server-side) → MCP client
+     → TriggersAPI MCP server → /v1 REST → PostgreSQL + Redis + BullMQ
+     → Explorer receives live SSE updates
+```
+
+Tool calls are shown in full — name, arguments, status, duration, and the real
+result — because the transparency is the point. The model key and Triggers
+tokens stay in the Copilot server's environment; the browser holds no
+credential, and lease tokens are redacted before they reach the page.
+
+### Running the demo
+
+Put a model key in `.env` (the only thing not generated for you):
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Then one command brings up the whole stack — infrastructure, migrations, demo
+workspace, tokens, and all five services:
+
+```bash
+pnpm demo
+```
+
+Open the **Copilot** at <http://localhost:5174> and the **Explorer** at
+<http://localhost:5173>, side by side. Both are already connected — no tokens to
+paste anywhere. `pnpm demo:stop` tears the containers down.
+
+Full setup, demo script, and security notes: [`docs/copilot.md`](docs/copilot.md).
+
+> Demo project for the GauntletAI × Zapier Partner Challenge. Not an official
+> Zapier product.
+
 ## Reliability model
 
 - **At-least-once delivery.** A consumer may see an event more than once (lease expiry,
@@ -213,6 +294,8 @@ apps/
   api/       Fastify API (routes, services, plugins)
   worker/    BullMQ maintenance worker (expired-lease recovery)
   explorer/  React + Vite Explorer UI (SSE)
+  mcp/       MCP server (stdio + streamable HTTP) wrapping the /v1 API
+  copilot/   Zapier AI Automation Copilot — agent runtime + UI, an MCP client
 packages/
   config/          Zod-validated environment
   contracts/       Zod schemas, error envelope, typed errors
@@ -241,6 +324,12 @@ Environment variables (validated at startup — see `.env.example`):
 | `MAX_ACTIVE_LONG_POLLS_PER_KEY`      | `50`                    | Long-poll concurrency cap per key |
 | `EXPLORER_STREAM_MAX_LENGTH`         | `1000`                  | Redis activity stream trim length |
 | `CORS_ORIGINS`                       | `http://localhost:5173` | Allowed origins                   |
+
+The MCP server has its own variables (`TRIGGERS_API_URL`, the three role tokens,
+and the HTTP transport settings) — see [`docs/mcp.md`](docs/mcp.md#configuration).
+The Copilot adds `ANTHROPIC_API_KEY` and `COPILOT_*` — see
+[`docs/copilot.md`](docs/copilot.md#environment-variables). Neither needs
+database or Redis access.
 
 > **Windows/OneDrive note:** keep this repo **outside** OneDrive (or exclude `node_modules`
 > from sync). OneDrive's Files-On-Demand can dehydrate `node_modules` into cloud placeholders

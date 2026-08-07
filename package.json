@@ -2,7 +2,7 @@
   "name": "triggers-api",
   "version": "0.1.0",
   "private": true,
-  "description": "TriggersAPI — durable event ingestion and delivery platform",
+  "description": "TriggersAPI \u2014 durable event ingestion and delivery platform",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -13,6 +13,14 @@
     "dev:api": "pnpm --filter @triggers/api dev",
     "dev:worker": "pnpm --filter @triggers/worker dev",
     "dev:explorer": "pnpm --filter @triggers/explorer dev",
+    "dev:mcp": "pnpm --filter @triggers/mcp dev",
+    "mcp:stdio": "pnpm --filter @triggers/mcp start:stdio",
+    "dev:copilot": "pnpm --filter @triggers/copilot dev",
+    "demo": "pnpm demo:up && pnpm demo:setup && pnpm demo:run",
+    "demo:up": "docker compose up -d --wait postgres redis && prisma migrate deploy",
+    "demo:setup": "tsx prisma/demo-setup.ts",
+    "demo:run": "concurrently -k -n api,worker,mcp,copilot,explorer -c blue,gray,magenta,cyan,green \"pnpm dev:api\" \"pnpm dev:worker\" \"pnpm dev:mcp\" \"pnpm dev:copilot\" \"pnpm dev:explorer\"",
+    "demo:stop": "docker compose down",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:integration": "pnpm --filter @triggers/api test:integration",
@@ -34,6 +42,7 @@
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.5",
+    "concurrently": "^9.1.2",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.4.2",

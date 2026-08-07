@@ -32,9 +32,13 @@ function Rollup({ e }: { e: EventListItem }) {
   );
 }
 
-export function Events() {
+/**
+ * `initialEventId` opens straight into an event's detail drawer, so an inbound
+ * deep link (e.g. from the Copilot) lands on the item rather than the list.
+ */
+export function Events({ initialEventId = null }: { initialEventId?: string | null } = {}) {
   const [filters, setFilters] = useState<EventFilters>({});
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
   const { data, isLoading, error, refetch } = useEvents(filters);
 
   const rows = useMemo(() => data ?? [], [data]);

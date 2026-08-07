@@ -1,0 +1,33 @@
+{
+  "name": "@triggers/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/stdio.ts",
+  "bin": {
+    "triggers-mcp": "./src/stdio.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/http.ts",
+    "start": "tsx src/http.ts",
+    "start:stdio": "tsx src/stdio.ts",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "^4.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@triggers/contracts": "workspace:*",
+    "@triggers/observability": "workspace:*",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

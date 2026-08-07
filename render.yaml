@@ -105,6 +105,84 @@ services:
           name: triggers-api
           envVarKey: LEASE_TOKEN_SECRET
 
+  # --- MCP server: exposes the API to AI agents over the Model Context
+  #     Protocol (Streamable HTTP at /mcp). Talks to the API over HTTP only,
+  #     so it needs no database or Redis access.
+  #
+  #     Defaults to `header` auth mode: each client supplies its own Triggers
+  #     keys via X-Triggers-{Admin,Producer,Consumer}-Token headers and this
+  #     service stores none. To instead lend the service's own keys behind a
+  #     single gateway secret, set MCP_HTTP_AUTH_MODE=shared, generate
+  #     MCP_HTTP_AUTH_TOKEN, and add the seeded TRIGGERS_*_TOKEN values.
+  - type: web
+    name: triggers-mcp
+    runtime: docker
+    repo: https://github.com/sohailataiml/triggersAPI
+    branch: explorer-redesign
+    dockerfilePath: ./apps/mcp/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MCP_HTTP_PORT
+        value: 3100
+      - key: LOG_LEVEL
+        value: info
+      # Must be a full URL with a scheme (validated at startup). Update this if
+      # the API service resolves to a different hostname after the first deploy.
+      - key: TRIGGERS_API_URL
+        value: https://triggers-api.onrender.com
+      - key: MCP_HTTP_AUTH_MODE
+        value: header
+
+  # --- Zapier AI Automation Copilot: an MCP client that operates the platform
+  #     in natural language. Serves its own SPA, so the browser is same-origin
+  #     with the agent API and no credential crosses an origin boundary.
+  #
+  #     Set ANTHROPIC_API_KEY and the seeded TRIGGERS_*_TOKEN values in the
+  #     Render dashboard (marked sync:false so they are never in source). The
+  #     Copilot forwards those tokens to the MCP server as X-Triggers-* headers;
+  #     without them it serves its setup screen instead of a broken chat box.
+  - type: web
+    name: triggers-copilot
+    runtime: docker
+    repo: https://github.com/sohailataiml/triggersAPI
+    branch: explorer-redesign
+    dockerfilePath: ./apps/copilot/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /copilot/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: COPILOT_PORT
+        value: 3200
+      - key: LOG_LEVEL
+        value: info
+      - key: COPILOT_MODEL
+        value: claude-opus-5
+      - key: COPILOT_EFFORT
+        value: medium
+      - key: MCP_SERVER_URL
+        value: https://triggers-mcp.onrender.com/mcp
+      - key: TRIGGERS_API_URL
+        value: https://triggers-api.onrender.com
+      - key: EXPLORER_URL
+        value: https://triggers-explorer.onrender.com
+      # Secrets — set these in the dashboard, never in this file.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TRIGGERS_ADMIN_TOKEN
+        sync: false
+      - key: TRIGGERS_PRODUCER_TOKEN
+        sync: false
+      - key: TRIGGERS_CONSUMER_TOKEN
+        sync: false
+
   # --- Explorer (Vite static site). The browser calls the API cross-origin;
   #     set "API base" in the app's Settings to the API URL after deploy. ---
   - type: web

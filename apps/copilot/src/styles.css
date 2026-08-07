@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------ *
+ * Design tokens — mirrors the TriggersAPI Explorer so the Copilot and
+ * the console read as one product. HSL channel triples so Tailwind's
+ * <alpha-value> works.
+ * ------------------------------------------------------------------ */
+:root {
+  --bg: 240 12% 5%;
+  --surface: 240 9% 8%;
+  --surface-2: 240 8% 11%;
+  --border: 240 6% 17%;
+  --border-strong: 240 6% 26%;
+  --text: 220 18% 93%;
+  --muted: 222 10% 62%;
+  --faint: 222 8% 42%;
+  --accent: 248 82% 68%;
+
+  /* 7-stage event lifecycle status system */
+  --st-ingested: 212 90% 62%;
+  --st-pending: 190 88% 55%;
+  --st-leased: 40 96% 58%;
+  --st-ack: 150 62% 48%;
+  --st-retry: 26 92% 58%;
+  --st-dead: 358 78% 62%;
+  --st-replay: 276 74% 68%;
+
+  color-scheme: dark;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 78% -8%, hsl(var(--accent) / 0.1), transparent 60%),
+    radial-gradient(900px 500px at 8% 4%, hsl(212 90% 40% / 0.08), transparent 55%), hsl(var(--bg));
+  color: hsl(var(--text));
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border-strong)) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--border-strong));
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-border bg-surface/70 shadow-card backdrop-blur-sm;
+  }
+  .panel-pad {
+    @apply p-4 sm:p-5;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-border-strong
+      bg-surface-2 px-3 py-1.5 text-sm font-medium text-text transition
+      hover:border-accent/60 hover:bg-surface-2/80
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-transparent bg-accent text-white hover:border-transparent hover:bg-accent/90;
+  }
+  .btn-danger {
+    @apply border-dead/40 text-dead hover:border-dead hover:bg-dead/10;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent hover:bg-surface-2;
+  }
+  .input {
+    @apply w-full rounded-lg border border-border-strong bg-bg/60 px-3 py-1.5 text-sm text-text
+      transition placeholder:text-faint
+      focus-visible:border-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
+  }
+  .field-label {
+    @apply text-xs font-medium uppercase tracking-wide text-muted;
+  }
+  .mono {
+    @apply font-mono text-[0.8rem];
+  }
+  /* Chat surfaces */
+  .bubble-user {
+    @apply rounded-2xl rounded-br-md border border-accent/25 bg-accent-soft px-3.5 py-2.5
+      text-sm leading-relaxed text-text shadow-card;
+  }
+  .tool-card {
+    @apply overflow-hidden rounded-xl border border-border bg-surface-2/60 text-sm;
+  }
+}
+
+/* Presentation mode scales the whole surface up for a projector. */
+.demo-mode {
+  font-size: 1.075rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -230,4 +230,171 @@ Second Explorer pass, prioritizing demo value. All working behavior + the 14 pri
 
 ### Still deferred
 
-Recharts (no metrics-history store), webhook push delivery mode, MCP chatbot.
+Recharts (no metrics-history store), webhook push delivery mode.
+
+---
+
+## MCP server — `apps/mcp` ✅
+
+Exposes the platform to AI agents over the Model Context Protocol. A thin client
+of `/v1` (not a second DB consumer), so API-key auth, role checks, idempotency,
+and metrics all stay in force.
+
+- **14 tools**, role-gated from the configured tokens: `ingest_event` (producer);
+  `lease_deliveries`/`ack_delivery`/`nack_delivery` (consumer); `replay_delivery`,
+  `get_delivery`, subscription CRUD (admin); plus the read tools. `reset_workspace`
+  is destructive and off unless `TRIGGERS_MCP_ENABLE_RESET=true`.
+- **3 resources**: `triggers://overview`, `triggers://subscriptions`,
+  `triggers://deliveries/dead-letter`.
+- **Both transports**: stdio (local clients) and Streamable HTTP (hosted), sharing
+  one server core. HTTP defaults to `header` auth — each session supplies its own
+  Triggers keys, so the process stores no credentials.
+- Tool input **and** output schemas come from `@triggers/contracts`, so drift
+  between the MCP surface and the API fails a test.
+- Errors return as `isError` results carrying the API's error code plus a
+  recovery hint (`LEASE_EXPIRED` → "re-lease, don't reuse the token").
+
+**Verified:** 77 tests, including two genuine integration suites (a live socket
+
+- real MCP client over Streamable HTTP; a spawned stdio child process proving
+  logs go to stderr rather than corrupting the protocol). Live run against the
+  real stack exercised ingest → lease → ack, ACK idempotency, producer
+  idempotency, nack → dead-letter, admin replay, and error surfacing.
+
+**One bug found and fixed:** the server advertised a `resources` capability
+unconditionally while only registering resources for admin/consumer keys, so a
+producer-only session claimed the capability then returned `Method not found`.
+
+`packages/observability` gained an additive `toStderr` logger option (stdio
+transports must not write to stdout).
+
+---
+
+## Zapier AI Automation Copilot — `apps/copilot` ✅
+
+An AI client that operates the platform in natural language. **A consumer of the
+MCP server, not a second control plane** — every mutation is a real MCP tool
+call, and the Explorer shows the same state move live.
+
+### Architecture
+
+```
+Browser (:5174) → Copilot backend (:3200) → MCP client → MCP server (:3100)
+   → /v1 REST (:3000) → PostgreSQL + Redis + BullMQ → Explorer SSE (:5173)
+```
+
+Standalone app (chosen over an Explorer section) with its own Fastify backend
+and Vite frontend. Reuses `@triggers/contracts` for types; mirrors the Explorer's
+token-driven Tailwind theme so the two surfaces read as one product.
+
+### Capabilities are discovered, never assumed
+
+`tools/list` + `resources/list` on connect; JSON Schemas convert straight into
+Claude tool definitions, and the system prompt is built from what came back. A
+producer-only credential registers only `ingest_event` — the capability strip
+strikes through Consumer and Admin, those suggested prompts disappear, and the
+agent is told plainly it cannot perform them.
+
+### Agent runtime
+
+`claude-opus-5`, adaptive thinking, `effort: medium`, streaming, with a **manual
+tool loop** rather than the SDK tool runner — the UI needs each tool call
+surfaced as it starts and again when it settles, interleaved with text deltas.
+Handles `refusal`, `pause_turn`, cancellation, and a hard iteration ceiling.
+
+### Three findings from live testing, all fixed
+
+1. **Fabricated lease tokens (the significant one).** Rather than copying the
+   64-char token from the lease result, the model invented `lt_0…`; the platform
+   rejected the ACK with `LEASE_CONFLICT` and the delivery was stranded until its
+   visibility timeout. Reproduced in 12s, so not expiry. **Fix is custody, not
+   prompting:** `LeaseRegistry` records the token server-side, redacts it from
+   the model's context, and substitutes the real value on ack/nack. The token now
+   reaches neither the browser nor the model.
+2. **Stale state answers.** "What's going on?" was answered by arithmetic over
+   earlier turns — it reported 5 events / 3 acknowledged when the database had
+   4 / 1. Prompt now requires a fresh tool call for any current-state question.
+3. **Interactive leases expiring.** A 60s visibility timeout is shorter than a
+   human-paced exchange; the agent now leases with `visibilityTimeout=300`.
+
+### Security
+
+Model key and Triggers tokens live only in the Copilot server's environment.
+Lease tokens are masked server-side before streaming to the UI. No
+`dangerouslySetInnerHTML` anywhere — model output and tool results render as
+React text nodes, so HTML injection is structurally impossible. Technical error
+detail is development-only. Asserted in tests: nothing in `localStorage`, no
+token in the DOM, no credential in the capabilities payload; verified by grep:
+no `trg_`/`sk-ant-` in the built bundles or tracked files.
+
+### Verified
+
+- 129 Copilot tests. The MCP boundary is **not** mocked — one suite boots the
+  real MCP server over the real Streamable HTTP transport and drives it with the
+  Copilot's own client (handshake, discovery, role gating, tool round-trip,
+  resource reads, masking).
+- **Live end-to-end against the real stack with a real LLM**, all assertions
+  passing: subscription check → `ingest_event` → `list_deliveries` (crucially
+  _not_ leasing to inspect) → `lease_deliveries` → `ack_delivery` →
+  `get_overview`, whose reported counts matched `/v1/explorer/overview` exactly.
+- **In-browser**: UI renders, MCP connected, all three roles, live activity
+  streaming; a suggested prompt produced a real `ingest_event` tool card
+  (Succeeded, 113ms) and the activity feed showed `event.ingested` /
+  `delivery.created` seconds later. Zero console errors.
+- Repo gate green: `pnpm format`, `lint`, `typecheck` (11 projects), `test`
+  (Explorer 24 · domain 14 · MCP 77 · Copilot 129), `build`.
+
+Explorer got one small additive change: `?section=` / `?event=` deep links, so
+"Open in Explorer" lands on the item. Its 24 tests still pass.
+
+### Known limitations
+
+One in-memory conversation (no persistence); no intermediate progress for
+long-running tools; Explorer deep links are event-scoped; single workspace.
+
+---
+
+## Zero-setup demo — `pnpm demo` ✅
+
+A grader should not have to copy a token or start five terminals. One command
+now brings the whole stack up already connected.
+
+- **`pnpm demo`** = `demo:up` (compose `--wait` + `migrate deploy`) →
+  `demo:setup` → `demo:run` (all five services under `concurrently -k`).
+- **`prisma/demo-setup.ts`** is idempotent and converging: it finds-or-creates
+  the demo workspace and subscription, **validates the tokens already in `.env`
+  against the database** and reuses them, minting only what is missing, then
+  writes everything back — including the `VITE_DEMO_*` values the Explorer uses
+  to auto-connect. `db:seed` is left untouched (it always mints fresh, which is
+  right for a first run and wrong for a restartable demo).
+- The **consumer key is minted unscoped**. `db:seed` scopes it to the seeded
+  subscription, so leasing from a subscription the agent creates itself fails
+  with 403 — the exact failure hit during Copilot verification.
+- **Vite `envDir` now points at the repo root** for both the Explorer and the
+  Copilot, so one `.env` drives everything. Verified by grep that Vite still
+  injects only `VITE_`-prefixed vars: the model key is in neither bundle, and
+  the Copilot's browser bundle carries no Triggers token at all.
+- Removed the Copilot's dead `/v1` Vite proxy — its frontend only ever calls
+  `/copilot/*`, which is the architectural claim made in the docs.
+- **`useCapabilities`** replaces the one-shot capability check: backoff retry,
+  then a slow poll, recovering on its own when MCP appears. Start order no
+  longer matters, and a startup race shows "Connecting…" rather than a setup
+  screen a reload would have fixed. A missing model key still surfaces
+  immediately — no retry creates an environment variable.
+- **Port-conflict guard.** A busy API port halts the run with instructions,
+  because two servers binding the same port on different interfaces sends
+  requests to whichever one `localhost` resolves to — a failure that reads as
+  the demo misbehaving. Probes by connecting, not binding: on Windows
+  SO_REUSEADDR makes a bind test report a busy port as free.
+
+**Verified:** `pnpm demo` brought the stack from cold to fully connected in
+~16-20s; `demo:setup` run three times reused the same workspace and tokens
+(2 workspaces before and after, identical token); the guard correctly halted on
+this machine's occupied :3000; both UIs load already connected — Explorer shows
+"Stream live" with its preloaded-credentials banner and no Settings prompt,
+Copilot shows MCP connected with all three roles and 14 tools.
+
+**Caveat, inherited from the Explorer's design:** it is a static SPA that calls
+the API directly, so `VITE_DEMO_*` tokens _are_ baked into its bundle when set
+at build time. Fine locally, which is the point; `render.yaml` deliberately does
+not set them for the deployed Explorer.

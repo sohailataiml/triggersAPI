@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "allowImportingTsExtensions": true
+  },
+  // Config files are excluded deliberately: vitest bundles Vite 5 types while
+  // @vitejs/plugin-react resolves Vite 6, and typechecking the config surfaces
+  // that harmless duplication as an error. Matches the Explorer's setup.
+  "include": ["src"]
+}

@@ -50,9 +50,28 @@ function loadSettings(): Settings {
   return { ...DEMO_DEFAULTS };
 }
 
+const SECTIONS: Section[] = ['dashboard', 'pipeline', 'events', 'system'];
+
+/**
+ * Deep-link support for inbound links (the Copilot's "Open in Explorer").
+ * Read once on mount and never written back, so existing in-app navigation is
+ * untouched and no route behaviour changes for anyone already using the app.
+ */
+function readDeepLink(): { section: Section | null; eventId: string | null } {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('section');
+    const section = SECTIONS.find((candidate) => candidate === requested) ?? null;
+    return { section, eventId: params.get('event') };
+  } catch {
+    return { section: null, eventId: null };
+  }
+}
+
 export function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
-  const [section, setSection] = useState<Section>('dashboard');
+  const [deepLink] = useState(readDeepLink);
+  const [section, setSection] = useState<Section>(deepLink.section ?? 'dashboard');
   const [settingsOpen, setSettingsOpen] = useState(!loadSettings().adminToken);
 
   const api = useMemo(() => new ApiClient(settings), [settings]);
@@ -101,7 +120,7 @@ export function App() {
         ) : section === 'pipeline' ? (
           <Pipeline />
         ) : section === 'events' ? (
-          <Events />
+          <Events initialEventId={deepLink.eventId} />
         ) : (
           <System />
         )}

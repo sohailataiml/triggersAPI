@@ -1,4 +1,7 @@
-import { pino, type Logger, type LoggerOptions } from 'pino';
+import { pino, destination as pinoDestination, type Logger, type LoggerOptions } from 'pino';
+
+/** File descriptor 2 — stderr. */
+const STDERR_FD = 2;
 
 /** Fields that must never appear in logs. */
 const REDACT_PATHS = [
@@ -14,6 +17,12 @@ export interface CreateLoggerOptions {
   level?: string;
   name?: string;
   pretty?: boolean;
+  /**
+   * Write log lines to stderr instead of stdout. Required for a process that
+   * speaks a protocol over stdout (such as an MCP stdio transport), where a
+   * stray log line would corrupt the stream.
+   */
+  toStderr?: boolean;
 }
 
 /**
@@ -33,7 +42,7 @@ export function createLogger(options: CreateLoggerOptions = {}): Logger {
     },
   };
 
-  return pino(base);
+  return options.toStderr ? pino(base, pinoDestination(STDERR_FD)) : pino(base);
 }
 
 export type { Logger } from 'pino';
