@@ -63,7 +63,14 @@ export interface McpToolCallOutcome {
   text: string;
 }
 
-const CONNECT_TIMEOUT_MS = 15_000;
+/**
+ * Generous because a hosted MCP server may be cold. Render's free tier spins
+ * services down when idle and a wake can take most of a minute; a 15s budget
+ * guaranteed failure on the first request after a quiet period, which read as
+ * "MCP is broken" rather than "MCP is waking up". The UI shows a connecting
+ * state and retries, so waiting is cheaper than a spurious failure.
+ */
+const CONNECT_TIMEOUT_MS = 60_000;
 
 /**
  * MCP client for the Triggers MCP server over Streamable HTTP.
@@ -139,7 +146,7 @@ export class TriggersMcpClient {
         return client;
       })
       .catch((cause: unknown) => {
-        const error = toCopilotError(cause);
+        const error = toCopilotError(cause, 'mcp');
         this.lastError = error.message;
         throw error;
       })
@@ -222,7 +229,7 @@ export class TriggersMcpClient {
     } catch (cause) {
       // A transport-level failure invalidates the cached session.
       await this.reset();
-      throw toCopilotError(cause);
+      throw toCopilotError(cause, 'mcp');
     }
 
     const text = (result.content ?? [])

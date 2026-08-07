@@ -50,6 +50,60 @@ export class CopilotError extends Error {
   }
 }
 
+/**
+ * Where a failure came from. Status codes are ambiguous on their own — a 401
+ * from the MCP server and a 401 from the model provider mean entirely different
+ * things, and guessing sends the reader to the wrong environment variable.
+ * A live deploy reported a missing MCP token as "check ANTHROPIC_API_KEY",
+ * which is exactly the wrong place to look.
+ */
+export type ErrorOrigin = 'mcp' | 'llm' | 'unknown';
+
+/** Origin-specific readings of otherwise ambiguous auth/rate-limit failures. */
+const BY_ORIGIN: Record<
+  'mcp' | 'llm',
+  Array<{
+    match: RegExp;
+    kind: CopilotErrorKind;
+    message: string;
+    retryable: boolean;
+  }>
+> = {
+  mcp: [
+    {
+      match: /401|unauthorized/i,
+      kind: 'mcp_unavailable',
+      message:
+        'The MCP server rejected the credentials. Check the TRIGGERS_*_TOKEN values on the Copilot server — at least one is required.',
+      retryable: false,
+    },
+    {
+      match: /403|forbidden/i,
+      kind: 'mcp_unavailable',
+      message:
+        'The MCP server refused the request. The configured Triggers key lacks the required role.',
+      retryable: false,
+    },
+    {
+      // Seen from a hosting edge while a spun-down service wakes; nothing to do
+      // with the model provider's rate limits.
+      match: /429|rate.?limit|too many requests/i,
+      kind: 'mcp_unavailable',
+      message: 'The MCP server is busy or still starting up. It should recover shortly.',
+      retryable: true,
+    },
+  ],
+  llm: [
+    {
+      match: /401|unauthorized|invalid x-api-key|authentication_error/i,
+      kind: 'llm_unavailable',
+      message:
+        'The model provider rejected the credential. Check ANTHROPIC_API_KEY on the Copilot server.',
+      retryable: false,
+    },
+  ],
+};
+
 /** Technical fragments mapped to plain language, checked in order. */
 const PATTERNS: Array<{
   match: RegExp;
@@ -77,10 +131,17 @@ const PATTERNS: Array<{
     retryable: true,
   },
   {
-    match: /401|unauthorized|invalid x-api-key|authentication_error/i,
+    // Reached only when the origin is unknown; `BY_ORIGIN` handles the rest.
+    match: /invalid x-api-key|authentication_error/i,
     kind: 'llm_unavailable',
     message:
       'The model provider rejected the credential. Check ANTHROPIC_API_KEY on the Copilot server.',
+    retryable: false,
+  },
+  {
+    match: /401|unauthorized/i,
+    kind: 'internal',
+    message: 'A credential was rejected. Check the tokens configured on the Copilot server.',
     retryable: false,
   },
   {
@@ -97,8 +158,13 @@ const PATTERNS: Array<{
   },
 ];
 
-/** Convert any thrown value into a safe, actionable Copilot error. */
-export function toCopilotError(cause: unknown): CopilotError {
+/**
+ * Convert any thrown value into a safe, actionable Copilot error.
+ *
+ * Pass `origin` wherever the caller knows it — it is what lets an auth failure
+ * name the right environment variable instead of the plausible-looking one.
+ */
+export function toCopilotError(cause: unknown, origin: ErrorOrigin = 'unknown'): CopilotError {
   if (cause instanceof CopilotError) return cause;
 
   const raw = cause instanceof Error ? cause.message : String(cause);
@@ -112,7 +178,10 @@ export function toCopilotError(cause: unknown): CopilotError {
     });
   }
 
-  for (const pattern of PATTERNS) {
+  // Origin-specific readings win, so an ambiguous status is attributed to the
+  // system that actually produced it.
+  const originPatterns = origin === 'unknown' ? [] : BY_ORIGIN[origin];
+  for (const pattern of [...originPatterns, ...PATTERNS]) {
     if (pattern.match.test(raw)) {
       return new CopilotError({
         kind: pattern.kind,

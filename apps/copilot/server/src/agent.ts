@@ -121,7 +121,7 @@ export class CopilotAgent {
     try {
       tools = toAnthropicTools(await this.mcp.listTools());
     } catch (cause) {
-      yield { type: 'error', error: this.shape(toCopilotError(cause)) };
+      yield { type: 'error', error: this.shape(toCopilotError(cause, 'mcp')) };
       yield { type: 'done', stopReason: null };
       return;
     }
@@ -143,7 +143,7 @@ export class CopilotAgent {
       try {
         message = yield* this.streamOnce(messages, tools, systemPrompt, signal);
       } catch (cause) {
-        const error = toCopilotError(cause);
+        const error = toCopilotError(cause, 'llm');
         if (error.kind === 'cancelled') {
           yield { type: 'done', stopReason: 'cancelled' };
           return;
@@ -268,7 +268,7 @@ export class CopilotAgent {
             content: clampToolText(modelText),
           });
         } catch (cause) {
-          const error = toCopilotError(cause);
+          const error = toCopilotError(cause, 'mcp');
           const durationMs = Date.now() - startedAt;
           this.log.warn({ tool: use.name, kind: error.kind }, 'MCP tool call failed');
 
