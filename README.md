@@ -9,7 +9,7 @@ retries, a dead-letter office with replay, and low-latency **long polling**. A R
 Built with Node.js + TypeScript, Fastify, Prisma/PostgreSQL, Redis, BullMQ, and Vite.
 
 ---
-
+Complete end to end architecure with document processing and storing with AWS s3 is shown below:
 <img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/e14e47ba-08f1-4c6b-b36c-6dad4234fbd9" />
 
 
