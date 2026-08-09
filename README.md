@@ -10,6 +10,9 @@ Built with Node.js + TypeScript, Fastify, Prisma/PostgreSQL, Redis, BullMQ, and 
 
 ---
 
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/e14e47ba-08f1-4c6b-b36c-6dad4234fbd9" />
+
+
 ## Contents
 
 - [Architecture](#architecture)
